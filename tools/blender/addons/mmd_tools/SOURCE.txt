@@ -1,0 +1,6 @@
+Vendored from https://github.com/MMD-Blender/blender_mmd_tools
+Revision: 325d7d4
+License: GPL-3.0-or-later
+
+This repository keeps only the addon copy used by Blender runtime automation.
+See LICENSE in this directory for the upstream license text.

@@ -54,7 +54,7 @@ export default function App() {
       createModelViewerHtml({
         modelUri,
         posterText:
-          '把 PMX / VMD 在 Blender 里转成带动画的 GLB 之后，这里会直接显示模型，并通过重建 Viewer 来重播动作。',
+          'GLB 还没有加载成功时会显示这里。确认 Metro 已包含 glb 资源，并在真机或模拟器里重新加载 Expo 应用。',
       }),
     [modelUri, viewerSeed]
   );
@@ -73,8 +73,7 @@ export default function App() {
           <Text style={styles.eyebrow}>Expo MVP</Text>
           <Text style={styles.title}>MMD Laugh Player</Text>
           <Text style={styles.subtitle}>
-            当前资产链已经齐了：PMX、贴图、VMD、MP3。下一步只差把模型和动作烘成
-            GLB。
+            当前仓库已经接入导出的 GLB。点击按钮会重播配乐，并通过重建 3D 视图来重播模型动画。
           </Text>
         </View>
 
@@ -100,7 +99,7 @@ export default function App() {
             <View>
               <Text style={styles.switchLabel}>循环播放</Text>
               <Text style={styles.switchHint}>
-                音频可以先循环，模型动画会在导出 GLB 后跟上。
+                音频和模型已经接进原型，循环会持续重播配乐。
               </Text>
             </View>
             <Switch value={isLooping} onValueChange={setIsLooping} />
