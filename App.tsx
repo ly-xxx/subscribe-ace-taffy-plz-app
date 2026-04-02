@@ -1,85 +1,83 @@
-import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Modal,
   Pressable,
   SafeAreaView,
-  ScrollView,
-  Share,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { cacheDirectory, makeDirectoryAsync, writeAsStringAsync } from 'expo-file-system/legacy';
 import { WebView } from 'react-native-webview';
 
 import { laughAudioModule, modelGlbModule, resolveAssetUri } from './src/assets';
 import { createModelViewerHtml } from './src/modelViewerHtml';
-import {
-  cameraPresets,
-  laughLines,
-  speedPresets,
-  type CameraPresetId,
-  type SpeedPresetId,
-} from './src/showConfig';
+import { cameraPresets, type CameraPresetId } from './src/showConfig';
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
+function hashString(value: string) {
+  let hash = 0;
 
-function formatTime(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds <= 0) {
-    return '00:00';
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0;
   }
 
-  const totalSeconds = Math.floor(seconds);
-  const minutes = Math.floor(totalSeconds / 60);
-  const remainder = totalSeconds % 60;
-
-  return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
+  return Math.abs(hash).toString(36);
 }
 
 type ViewerState = 'booting' | 'loading' | 'ready' | 'error';
 
-function OptionChip({
-  active,
-  label,
-  hint,
+function DockButton({
+  icon,
   onPress,
+  active = false,
+  large = false,
 }: {
-  active: boolean;
-  label: string;
-  hint: string;
+  icon: string;
   onPress: () => void;
+  active?: boolean;
+  large?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={[styles.optionChip, active ? styles.optionChipActive : null]}
+      style={[
+        styles.dockButton,
+        large ? styles.dockButtonLarge : null,
+        active ? styles.dockButtonActive : null,
+      ]}
     >
-      <Text style={[styles.optionChipLabel, active ? styles.optionChipLabelActive : null]}>
-        {label}
-      </Text>
-      <Text style={[styles.optionChipHint, active ? styles.optionChipHintActive : null]}>
-        {hint}
+      <Text
+        style={[
+          styles.dockButtonIcon,
+          large ? styles.dockButtonIconLarge : null,
+          active ? styles.dockButtonIconActive : null,
+        ]}
+      >
+        {icon}
       </Text>
     </Pressable>
   );
 }
 
-function StatTile({
+function CameraChip({
   label,
-  value,
+  active,
+  onPress,
 }: {
   label: string;
-  value: string;
+  active: boolean;
+  onPress: () => void;
 }) {
   return (
-    <View style={styles.statTile}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
-    </View>
+    <Pressable onPress={onPress} style={[styles.cameraChip, active ? styles.cameraChipActive : null]}>
+      <Text style={[styles.cameraChipLabel, active ? styles.cameraChipLabelActive : null]}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -91,24 +89,20 @@ export default function App() {
   const status = useAudioPlayerStatus(player);
   const webViewRef = useRef<WebView>(null);
   const finishHandledRef = useRef(false);
+  const autoStartedRef = useRef(false);
 
   const [modelUri, setModelUri] = useState<string | null>(null);
+  const [viewerPageUri, setViewerPageUri] = useState<string | null>(null);
   const [viewerState, setViewerState] = useState<ViewerState>('booting');
-  const [isLooping, setIsLooping] = useState(false);
-  const [cameraPresetId, setCameraPresetId] = useState<CameraPresetId>('stage');
-  const [speedPresetId, setSpeedPresetId] = useState<SpeedPresetId>('steady');
-  const [manualReplayCount, setManualReplayCount] = useState(0);
-  const [autoLoopCount, setAutoLoopCount] = useState(0);
-  const [lineIndex, setLineIndex] = useState(0);
+  const [viewerDetail, setViewerDetail] = useState('正在准备离线舞台。');
+  const [isLooping, setIsLooping] = useState(true);
   const [queuedStart, setQueuedStart] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [cameraPresetId, setCameraPresetId] = useState<CameraPresetId>('full');
 
   const selectedCamera = useMemo(
     () => cameraPresets.find((preset) => preset.id === cameraPresetId) ?? cameraPresets[0],
     [cameraPresetId]
-  );
-  const selectedSpeed = useMemo(
-    () => speedPresets.find((preset) => preset.id === speedPresetId) ?? speedPresets[0],
-    [speedPresetId]
   );
 
   useEffect(() => {
@@ -124,13 +118,14 @@ export default function App() {
           shouldRouteThroughEarpiece: false,
         });
       } catch {
-        // Expo Go or some Android devices may reject part of the audio mode setup.
+        // Some Android devices reject parts of the audio mode request.
       }
     }
 
     async function loadModel() {
       if (!modelGlbModule) {
         setModelUri(null);
+        setViewerDetail('没有找到 GLB 资源。');
         setViewerState('error');
         return;
       }
@@ -140,39 +135,36 @@ export default function App() {
         if (!cancelled) {
           setModelUri(uri);
           setViewerState('loading');
+          setViewerDetail('模型已找到，正在挂载离线舞台。');
         }
       } catch {
         if (!cancelled) {
+          setViewerDetail('GLB 资源解析失败。');
           setViewerState('error');
         }
       }
     }
 
-    prepareAudioMode();
-    loadModel();
+    void prepareAudioMode();
+    void loadModel();
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  useEffect(() => {
-    player.setPlaybackRate(selectedSpeed.rate, 'medium');
-  }, [player, selectedSpeed.rate]);
-
   function postViewerMessage(message: Record<string, unknown>) {
     webViewRef.current?.postMessage(JSON.stringify(message));
   }
 
-  async function runShowFromStart(options?: {
-    countManualReplay?: boolean;
-    countLoopReplay?: boolean;
-    rotateLine?: boolean;
-  }) {
-    const countManualReplay = options?.countManualReplay ?? false;
-    const countLoopReplay = options?.countLoopReplay ?? false;
-    const rotateLine = options?.rotateLine ?? false;
+  function buildViewerPayload() {
+    return {
+      animationSpeed: 1,
+      cameraOrbit: selectedCamera.cameraOrbit,
+    };
+  }
 
+  async function runShowFromStart() {
     if (!modelUri) {
       return;
     }
@@ -187,108 +179,13 @@ export default function App() {
     try {
       await player.seekTo(0);
     } catch {
-      // Seeking can race with initial load; play() below still handles the normal path.
+      // Seeking can race with initial decoder warmup.
     }
 
     player.play();
     postViewerMessage({
       type: 'playFromStart',
-      animationSpeed: selectedSpeed.rate,
-      cameraOrbit: selectedCamera.cameraOrbit,
-    });
-
-    startTransition(() => {
-      if (countManualReplay) {
-        setManualReplayCount((count) => count + 1);
-      }
-
-      if (countLoopReplay) {
-        setAutoLoopCount((count) => count + 1);
-      }
-
-      if (rotateLine) {
-        setLineIndex((index) => (index + 1) % laughLines.length);
-      }
-    });
-  }
-
-  useEffect(() => {
-    if (viewerState === 'ready' && queuedStart) {
-      void runShowFromStart({
-        countManualReplay: true,
-        rotateLine: true,
-      });
-    }
-  }, [queuedStart, viewerState]);
-
-  useEffect(() => {
-    if (viewerState !== 'ready') {
-      return;
-    }
-
-    postViewerMessage({
-      type: 'configure',
-      animationSpeed: selectedSpeed.rate,
-      cameraOrbit: selectedCamera.cameraOrbit,
-    });
-  }, [selectedCamera.cameraOrbit, selectedSpeed.rate, viewerState]);
-
-  useEffect(() => {
-    if (status.didJustFinish && !finishHandledRef.current) {
-      finishHandledRef.current = true;
-
-      if (isLooping) {
-        void runShowFromStart({
-          countLoopReplay: true,
-          rotateLine: true,
-        });
-      }
-    }
-
-    if (!status.didJustFinish) {
-      finishHandledRef.current = false;
-    }
-  }, [isLooping, status.didJustFinish, lineIndex, selectedCamera.cameraOrbit, selectedSpeed.rate]);
-
-  const html = useMemo(
-    () =>
-      createModelViewerHtml({
-        modelUri,
-        posterText:
-          'GLB 还没有加载成功时会显示这里。确认 Expo 已经打包 glb 资源，并保持网络可访问 model-viewer 运行脚本。',
-        initialAnimationSpeed: speedPresets[0].rate,
-        initialCameraOrbit: cameraPresets[0].cameraOrbit,
-      }),
-    [modelUri]
-  );
-
-  const progress =
-    status.duration > 0 ? clamp(status.currentTime / status.duration, 0, 1) : 0;
-  const currentLine = laughLines[lineIndex % laughLines.length];
-
-  const viewerStatusLabel =
-    viewerState === 'ready'
-      ? '模型就绪'
-      : viewerState === 'loading'
-        ? '模型加载中'
-        : viewerState === 'error'
-          ? '3D 视图异常'
-          : '初始化中';
-
-  const playbackStatusLabel = queuedStart
-    ? '排队开播中'
-    : status.playing
-      ? '塔菲正在狂笑'
-      : status.currentTime > 0 && progress < 1
-        ? '已暂停'
-        : manualReplayCount > 0 || autoLoopCount > 0
-          ? '等待下一次整活'
-          : '待机中';
-
-  async function startShow() {
-    await runShowFromStart({
-      countManualReplay: true,
-      rotateLine: true,
+      ...buildViewerPayload(),
     });
   }
 
@@ -305,231 +202,274 @@ export default function App() {
     }
 
     if (status.currentTime <= 0 || status.didJustFinish) {
-      await startShow();
+      await runShowFromStart();
       return;
     }
 
     player.play();
     postViewerMessage({
       type: 'resume',
-      animationSpeed: selectedSpeed.rate,
+      ...buildViewerPayload(),
     });
   }
 
-  async function resetShow() {
-    setQueuedStart(false);
-    player.pause();
-
-    try {
-      await player.seekTo(0);
-    } catch {
-      // Ignore seek races when the audio source is still warming up.
+  useEffect(() => {
+    if (viewerState !== 'ready') {
+      return;
     }
 
-    postViewerMessage({ type: 'stop' });
-  }
-
-  async function shareLaugh() {
-    await Share.share({
-      message: `我把塔菲放进了一个 GLB 梗图原型里。\n当前机位：${selectedCamera.label}\n当前强度：${selectedSpeed.label}\n文案：${currentLine}\n开播次数：${manualReplayCount + autoLoopCount}`,
-      title: '塔菲狂笑现场',
+    postViewerMessage({
+      type: 'configure',
+      ...buildViewerPayload(),
     });
-  }
+  }, [selectedCamera.cameraOrbit, viewerState]);
 
-  function rotateLine() {
-    setLineIndex((index) => (index + 1) % laughLines.length);
-  }
+  useEffect(() => {
+    if (viewerState === 'ready' && queuedStart) {
+      void runShowFromStart();
+    }
+  }, [queuedStart, viewerState]);
+
+  useEffect(() => {
+    if (viewerState !== 'ready' || autoStartedRef.current) {
+      return;
+    }
+
+    autoStartedRef.current = true;
+    void runShowFromStart();
+  }, [viewerState]);
+
+  useEffect(() => {
+    if (status.didJustFinish && !finishHandledRef.current) {
+      finishHandledRef.current = true;
+
+      if (isLooping) {
+        void runShowFromStart();
+      }
+    }
+
+    if (!status.didJustFinish) {
+      finishHandledRef.current = false;
+    }
+  }, [isLooping, status.didJustFinish]);
+
+  const html = useMemo(
+    () =>
+      createModelViewerHtml({
+        modelUri,
+        posterText: '离线 GLB 尚未完成挂载。',
+        initialAnimationSpeed: 1,
+        initialCameraOrbit: cameraPresets[0].cameraOrbit,
+      }),
+    [modelUri]
+  );
+
+  const viewerWebViewKey = viewerPageUri ?? `inline-${hashString(html)}`;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function writeViewerHtml() {
+      if (!cacheDirectory) {
+        if (!cancelled) {
+          setViewerPageUri(null);
+          setViewerDetail('设备没有可用缓存目录。');
+          setViewerState('error');
+        }
+        return;
+      }
+
+      const viewerDir = `${cacheDirectory}naiwa-viewer/`;
+      const fileUri = `${viewerDir}viewer-${hashString(html)}.html`;
+
+      try {
+        await makeDirectoryAsync(viewerDir, { intermediates: true });
+        await writeAsStringAsync(fileUri, html);
+
+        if (!cancelled) {
+          setViewerPageUri(fileUri);
+        }
+      } catch {
+        if (!cancelled) {
+          setViewerPageUri(null);
+          setViewerDetail('离线舞台页面写入失败。');
+          setViewerState('error');
+        }
+      }
+    }
+
+    void writeViewerHtml();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [html]);
 
   function handleViewerMessage(rawMessage: string) {
     try {
-      const payload = JSON.parse(rawMessage) as { type?: string };
+      const payload = JSON.parse(rawMessage) as {
+        type?: string;
+        detail?: string | { message?: string };
+      };
+
+      if (payload.type === 'viewer-loading') {
+        setViewerState('loading');
+        if (typeof payload.detail === 'string') {
+          setViewerDetail(payload.detail);
+        }
+        return;
+      }
 
       if (payload.type === 'viewer-ready') {
         setViewerState('ready');
+        if (typeof payload.detail === 'string') {
+          setViewerDetail(payload.detail);
+        } else if (payload.detail && typeof payload.detail === 'object') {
+          setViewerDetail(payload.detail.message ?? '离线舞台已完成挂载。');
+        }
         return;
       }
 
       if (payload.type === 'viewer-error') {
         setViewerState('error');
+        setViewerDetail(
+          typeof payload.detail === 'string' ? payload.detail : '3D 舞台初始化失败。'
+        );
       }
     } catch {
       // Ignore non-JSON bridge messages.
     }
   }
 
+  const playIcon = queuedStart ? '•' : status.playing ? '❚❚' : '▶';
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
-      <View style={styles.background}>
-        <View style={styles.orbPrimary} />
-        <View style={styles.orbSecondary} />
+      <View style={styles.stage}>
+        <View style={styles.glowWarm} />
+        <View style={styles.glowCool} />
+        <View style={styles.glowBounce} />
+
+        <WebView
+          key={viewerWebViewKey}
+          ref={webViewRef}
+          originWhitelist={['*']}
+          onError={(event) => {
+            setViewerState('error');
+            setViewerDetail(event.nativeEvent.description || 'WebView 打开离线舞台失败。');
+          }}
+          onMessage={(event) => handleViewerMessage(event.nativeEvent.data)}
+          source={viewerPageUri ? { uri: viewerPageUri } : { html }}
+          style={styles.webview}
+          javaScriptEnabled
+          cacheEnabled={false}
+          allowsInlineMediaPlayback
+          mediaPlaybackRequiresUserAction={false}
+          allowFileAccess
+          allowFileAccessFromFileURLs
+          allowUniversalAccessFromFileURLs
+        />
+
+        {viewerState !== 'ready' ? (
+          <View pointerEvents="none" style={styles.stateOverlay}>
+            <View style={styles.stateCard}>
+              {viewerState === 'error' ? (
+                <View style={styles.stateBadgeError}>
+                  <Text style={styles.stateBadgeText}>失败</Text>
+                </View>
+              ) : (
+                <ActivityIndicator size="small" color="#c58a27" />
+              )}
+
+              <Text style={styles.stateTitle}>
+                {viewerState === 'error' ? '载入失败' : '准备中'}
+              </Text>
+              <Text style={styles.stateBody}>{viewerDetail}</Text>
+            </View>
+          </View>
+        ) : null}
+
+        <View pointerEvents="box-none" style={styles.overlay}>
+          <View style={styles.topFade} />
+
+          <View style={styles.bottomDock}>
+            <View style={styles.dockGroup}>
+              <DockButton
+                icon="↻"
+                onPress={() => setIsLooping((value) => !value)}
+                active={isLooping}
+              />
+              <View style={styles.dockDivider} />
+              <DockButton icon={playIcon} onPress={() => void pauseOrResume()} large active />
+            </View>
+
+            <DockButton icon="⋯" onPress={() => setSettingsOpen(true)} />
+          </View>
+        </View>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      <Modal
+        animationType="slide"
+        transparent
+        visible={settingsOpen}
+        onRequestClose={() => setSettingsOpen(false)}
       >
-        <View style={styles.heroCard}>
-          <Text style={styles.eyebrow}>Naiwa Android Prototype</Text>
-          <Text style={styles.title}>点一下就狂笑</Text>
-          <Text style={styles.subtitle}>
-            现在已经不是单纯的 GLB 验证页了。这一版把塔菲的 3D 播放、配乐、机位和梗图文案都接成了一个可继续扩展的移动端原型。
-          </Text>
+        <View style={styles.sheetRoot}>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setSettingsOpen(false)} />
 
-          <View style={styles.heroMetaRow}>
-            <View style={styles.statusBadge}>
-              <View style={[styles.statusDot, viewerState === 'ready' ? styles.statusDotReady : styles.statusDotLoading]} />
-              <Text style={styles.statusBadgeText}>{viewerStatusLabel}</Text>
+          <View style={styles.sheetCard}>
+            <View style={styles.sheetHandle} />
+
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>镜头</Text>
+              <Pressable onPress={() => setSettingsOpen(false)} style={styles.sheetCloseButton}>
+                <Text style={styles.sheetCloseButtonText}>✕</Text>
+              </Pressable>
             </View>
 
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusBadgeText}>{playbackStatusLabel}</Text>
+            <View style={styles.cameraRow}>
+              {cameraPresets.map((preset) => (
+                <CameraChip
+                  key={preset.id}
+                  label={preset.label}
+                  active={preset.id === cameraPresetId}
+                  onPress={() => setCameraPresetId(preset.id)}
+                />
+              ))}
+            </View>
+
+            <View style={styles.sheetActionRow}>
+              <Pressable
+                onPress={() => setIsLooping((value) => !value)}
+                style={[styles.sheetActionButton, isLooping ? styles.sheetActionButtonActive : null]}
+              >
+                <Text
+                  style={[
+                    styles.sheetActionButtonLabel,
+                    isLooping ? styles.sheetActionButtonLabelActive : null,
+                  ]}
+                >
+                  循环
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setSettingsOpen(false);
+                  void runShowFromStart();
+                }}
+                style={[styles.sheetActionButton, styles.sheetActionButtonPrimary]}
+              >
+                <Text style={[styles.sheetActionButtonLabel, styles.sheetActionButtonLabelPrimary]}>
+                  重播
+                </Text>
+              </Pressable>
             </View>
           </View>
         </View>
-
-        <View style={styles.stageCard}>
-          <WebView
-            ref={webViewRef}
-            originWhitelist={['*']}
-            onMessage={(event) => handleViewerMessage(event.nativeEvent.data)}
-            source={{ html }}
-            style={styles.webview}
-            javaScriptEnabled
-            allowsInlineMediaPlayback
-            mediaPlaybackRequiresUserAction={false}
-          />
-
-          <View pointerEvents="none" style={styles.stageOverlayTop}>
-            <View style={styles.stagePill}>
-              <Text style={styles.stagePillLabel}>机位</Text>
-              <Text style={styles.stagePillValue}>{selectedCamera.label}</Text>
-            </View>
-
-            <View style={styles.stagePill}>
-              <Text style={styles.stagePillLabel}>强度</Text>
-              <Text style={styles.stagePillValue}>{selectedSpeed.label}</Text>
-            </View>
-          </View>
-
-          <View pointerEvents="none" style={styles.stageOverlayBottom}>
-            <Text style={styles.stageOverlayQuote}>{currentLine}</Text>
-            <Text style={styles.stageOverlayHint}>
-              {queuedStart ? '模型一就绪就会自动开播。' : '你可以边改机位边继续整活。'}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.transportCard}>
-          <View style={styles.transportHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>播放台</Text>
-              <Text style={styles.sectionHint}>把音频、模型动画和梗文案放在同一个节奏里。</Text>
-            </View>
-
-            <View style={styles.loopToggle}>
-              <Text style={styles.loopLabel}>连播模式</Text>
-              <Switch value={isLooping} onValueChange={setIsLooping} />
-            </View>
-          </View>
-
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${Math.max(progress * 100, 2)}%` }]} />
-          </View>
-
-          <View style={styles.progressMeta}>
-            <Text style={styles.progressText}>
-              {formatTime(status.currentTime)} / {formatTime(status.duration)}
-            </Text>
-            <Text style={styles.progressText}>
-              速度 {selectedSpeed.rate.toFixed(2)}x
-            </Text>
-          </View>
-
-          <View style={styles.primaryActionRow}>
-            <Pressable onPress={startShow} style={[styles.actionButton, styles.primaryActionButton]}>
-              <Text style={styles.primaryActionText}>
-                {manualReplayCount === 0 ? '点一下就开播' : '再来一遍'}
-              </Text>
-            </Pressable>
-
-            <Pressable onPress={pauseOrResume} style={[styles.actionButton, styles.secondaryActionButton]}>
-              <Text style={styles.secondaryActionText}>
-                {queuedStart
-                  ? '取消排队'
-                  : status.playing
-                    ? '暂停'
-                    : status.currentTime > 0 && progress < 1
-                      ? '继续'
-                      : '试听'}
-              </Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.secondaryActionRow}>
-            <Pressable onPress={resetShow} style={[styles.utilityButton, styles.utilityButtonMuted]}>
-              <Text style={styles.utilityButtonText}>归零</Text>
-            </Pressable>
-
-            <Pressable onPress={rotateLine} style={[styles.utilityButton, styles.utilityButtonMuted]}>
-              <Text style={styles.utilityButtonText}>换句文案</Text>
-            </Pressable>
-
-            <Pressable onPress={shareLaugh} style={[styles.utilityButton, styles.utilityButtonAccent]}>
-              <Text style={styles.utilityButtonAccentText}>分享文案</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        <View style={styles.statsRow}>
-          <StatTile label="手动开播" value={`${manualReplayCount} 次`} />
-          <StatTile label="自动续播" value={`${autoLoopCount} 次`} />
-          <StatTile label="当前状态" value={status.playing ? '狂笑中' : queuedStart ? '排队中' : '待命'} />
-        </View>
-
-        <View style={styles.panel}>
-          <Text style={styles.sectionTitle}>镜头机位</Text>
-          <Text style={styles.sectionHint}>同一份 GLB 先用不同镜头语言做出梗感变化。</Text>
-
-          <View style={styles.optionsGrid}>
-            {cameraPresets.map((preset) => (
-              <OptionChip
-                key={preset.id}
-                active={preset.id === cameraPresetId}
-                label={preset.label}
-                hint={preset.hint}
-                onPress={() => setCameraPresetId(preset.id)}
-              />
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.panel}>
-          <Text style={styles.sectionTitle}>狂笑强度</Text>
-          <Text style={styles.sectionHint}>这一组会同步控制音频播放速率和模型动画速率。</Text>
-
-          <View style={styles.optionsGrid}>
-            {speedPresets.map((preset) => (
-              <OptionChip
-                key={preset.id}
-                active={preset.id === speedPresetId}
-                label={preset.label}
-                hint={preset.hint}
-                onPress={() => setSpeedPresetId(preset.id)}
-              />
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.quoteCard}>
-          <Text style={styles.quoteEyebrow}>当前梗文案</Text>
-          <Text style={styles.quoteText}>{currentLine}</Text>
-          <Text style={styles.quoteFootnote}>
-            这块现在先做成轻量文案池，后面很适合扩成按钮触发、字幕条或者分享页模板。
-          </Text>
-        </View>
-      </ScrollView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -537,368 +477,263 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#071019',
+    backgroundColor: '#faf6ef',
   },
-  background: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#071019',
-  },
-  orbPrimary: {
-    position: 'absolute',
-    top: -70,
-    right: -40,
-    width: 220,
-    height: 220,
-    borderRadius: 220,
-    backgroundColor: 'rgba(247, 176, 64, 0.14)',
-  },
-  orbSecondary: {
-    position: 'absolute',
-    left: -80,
-    top: 300,
-    width: 260,
-    height: 260,
-    borderRadius: 260,
-    backgroundColor: 'rgba(77, 156, 255, 0.12)',
-  },
-  scrollContent: {
-    paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom: 28,
-    gap: 16,
-  },
-  heroCard: {
-    borderRadius: 28,
-    paddingHorizontal: 20,
-    paddingVertical: 22,
-    backgroundColor: 'rgba(13, 24, 38, 0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  eyebrow: {
-    color: '#f7b040',
-    fontSize: 12,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-  },
-  title: {
-    marginTop: 8,
-    color: '#f9fbff',
-    fontSize: 34,
-    fontWeight: '900',
-    lineHeight: 38,
-  },
-  subtitle: {
-    marginTop: 10,
-    color: '#b0bfd2',
-    fontSize: 14,
-    lineHeight: 22,
-  },
-  heroMetaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 18,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: '#101e31',
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 8,
-  },
-  statusDotReady: {
-    backgroundColor: '#49d990',
-  },
-  statusDotLoading: {
-    backgroundColor: '#f7b040',
-  },
-  statusBadgeText: {
-    color: '#dbe7f5',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  stageCard: {
-    position: 'relative',
-    minHeight: 420,
-    borderRadius: 30,
+  stage: {
+    flex: 1,
+    backgroundColor: '#faf6ef',
     overflow: 'hidden',
-    backgroundColor: '#08111a',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    shadowColor: '#000',
-    shadowOpacity: 0.28,
-    shadowRadius: 26,
-    shadowOffset: {
-      width: 0,
-      height: 16,
-    },
-    elevation: 10,
+  },
+  glowWarm: {
+    position: 'absolute',
+    top: -140,
+    left: -80,
+    width: 320,
+    height: 320,
+    borderRadius: 320,
+    backgroundColor: 'rgba(255, 219, 163, 0.58)',
+  },
+  glowCool: {
+    position: 'absolute',
+    top: 70,
+    right: -110,
+    width: 320,
+    height: 320,
+    borderRadius: 320,
+    backgroundColor: 'rgba(220, 232, 255, 0.34)',
+  },
+  glowBounce: {
+    position: 'absolute',
+    bottom: -130,
+    left: 30,
+    right: 30,
+    height: 240,
+    borderRadius: 240,
+    backgroundColor: 'rgba(255, 229, 187, 0.48)',
   },
   webview: {
     flex: 1,
-    minHeight: 420,
     backgroundColor: 'transparent',
   },
-  stageOverlayTop: {
-    position: 'absolute',
-    left: 14,
-    right: 14,
-    top: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
+  stateOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
   },
-  stageOverlayBottom: {
-    position: 'absolute',
-    left: 14,
-    right: 14,
-    bottom: 14,
-    borderRadius: 22,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(7, 16, 25, 0.72)',
-  },
-  stagePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 18,
-    backgroundColor: 'rgba(7, 16, 25, 0.72)',
-    minWidth: 96,
-  },
-  stagePillLabel: {
-    color: '#8fa5bf',
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-  },
-  stagePillValue: {
-    marginTop: 4,
-    color: '#f9fbff',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  stageOverlayQuote: {
-    color: '#f9fbff',
-    fontSize: 16,
-    fontWeight: '800',
-    lineHeight: 22,
-  },
-  stageOverlayHint: {
-    marginTop: 6,
-    color: '#94a8c1',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  transportCard: {
-    borderRadius: 28,
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    backgroundColor: 'rgba(12, 21, 34, 0.94)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    gap: 14,
-  },
-  transportHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  stateCard: {
     alignItems: 'center',
     gap: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 22,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 253, 249, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(108, 84, 40, 0.08)',
+    shadowColor: '#8a672a',
+    shadowOpacity: 0.14,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 12,
   },
-  sectionTitle: {
-    color: '#f9fbff',
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  sectionHint: {
-    marginTop: 4,
-    color: '#8fa5bf',
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  loopToggle: {
+  stateBadgeError: {
+    minWidth: 54,
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: '#2e2115',
   },
-  loopLabel: {
-    color: '#dce7f4',
+  stateBadgeText: {
+    color: '#fffaf2',
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 1.6,
   },
-  progressTrack: {
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: '#101c2d',
-    overflow: 'hidden',
+  stateTitle: {
+    color: '#21160d',
+    fontSize: 26,
+    fontWeight: '900',
   },
-  progressFill: {
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: '#f7b040',
+  stateBody: {
+    maxWidth: 280,
+    color: '#7a6550',
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: 'center',
   },
-  progressMeta: {
-    flexDirection: 'row',
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'space-between',
-    gap: 10,
   },
-  progressText: {
-    color: '#adc0d8',
-    fontSize: 12,
+  topFade: {
+    height: 110,
+    backgroundColor: 'rgba(250, 246, 239, 0.26)',
+  },
+  bottomDock: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    bottom: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dockGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 253, 249, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(112, 91, 58, 0.1)',
+    shadowColor: '#7f6232',
+    shadowOpacity: 0.18,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 14,
+  },
+  dockDivider: {
+    width: 1,
+    height: 26,
+    marginHorizontal: 8,
+    backgroundColor: 'rgba(112, 91, 58, 0.12)',
+  },
+  dockButton: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 250, 243, 0.78)',
+    shadowColor: '#7f6232',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+  },
+  dockButtonLarge: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+  },
+  dockButtonActive: {
+    backgroundColor: '#21160d',
+  },
+  dockButtonIcon: {
+    color: '#21160d',
+    fontSize: 25,
+    fontWeight: '800',
+  },
+  dockButtonIconLarge: {
+    fontSize: 30,
+  },
+  dockButtonIconActive: {
+    color: '#fffaf2',
+  },
+  sheetRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(22, 14, 8, 0.18)',
+  },
+  sheetCard: {
+    paddingHorizontal: 22,
+    paddingTop: 12,
+    paddingBottom: 28,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    backgroundColor: '#fffbf6',
+    borderTopWidth: 1,
+    borderColor: 'rgba(112, 91, 58, 0.08)',
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(112, 91, 58, 0.16)',
+  },
+  sheetHeader: {
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sheetTitle: {
+    color: '#21160d',
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  sheetCloseButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f4ede2',
+  },
+  sheetCloseButtonText: {
+    color: '#2d2116',
+    fontSize: 18,
     fontWeight: '700',
   },
-  primaryActionRow: {
+  cameraRow: {
+    marginTop: 18,
     flexDirection: 'row',
     gap: 10,
   },
-  actionButton: {
-    minHeight: 54,
+  cameraChip: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 14,
+    backgroundColor: '#f7f0e6',
   },
-  primaryActionButton: {
-    flex: 1.4,
-    backgroundColor: '#f7b040',
+  cameraChipActive: {
+    backgroundColor: '#21160d',
   },
-  secondaryActionButton: {
-    flex: 1,
-    backgroundColor: '#16273f',
-  },
-  primaryActionText: {
-    color: '#221100',
+  cameraChipLabel: {
+    color: '#2d2116',
     fontSize: 16,
-    fontWeight: '900',
-  },
-  secondaryActionText: {
-    color: '#f9fbff',
-    fontSize: 15,
     fontWeight: '800',
   },
-  secondaryActionRow: {
+  cameraChipLabelActive: {
+    color: '#fffaf2',
+  },
+  sheetActionRow: {
+    marginTop: 18,
     flexDirection: 'row',
     gap: 10,
   },
-  utilityButton: {
+  sheetActionButton: {
     flex: 1,
-    minHeight: 44,
-    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingVertical: 15,
+    borderRadius: 18,
+    backgroundColor: '#f4ede2',
   },
-  utilityButtonMuted: {
-    backgroundColor: '#111d2e',
+  sheetActionButtonActive: {
+    backgroundColor: '#f2cf8f',
   },
-  utilityButtonAccent: {
-    backgroundColor: '#204c8e',
+  sheetActionButtonPrimary: {
+    backgroundColor: '#21160d',
   },
-  utilityButtonText: {
-    color: '#dce7f4',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  utilityButtonAccentText: {
-    color: '#eef5ff',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  statTile: {
-    flex: 1,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(12, 21, 34, 0.94)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  statLabel: {
-    color: '#8fa5bf',
-    fontSize: 12,
-  },
-  statValue: {
-    marginTop: 8,
-    color: '#f9fbff',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  panel: {
-    borderRadius: 28,
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    backgroundColor: 'rgba(12, 21, 34, 0.94)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  optionsGrid: {
-    marginTop: 14,
-    gap: 10,
-  },
-  optionChip: {
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#101c2d',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.04)',
-  },
-  optionChipActive: {
-    backgroundColor: '#182c48',
-    borderColor: 'rgba(247,176,64,0.35)',
-  },
-  optionChipLabel: {
-    color: '#f1f6ff',
+  sheetActionButtonLabel: {
+    color: '#2d2116',
     fontSize: 15,
     fontWeight: '800',
   },
-  optionChipLabelActive: {
-    color: '#ffd892',
+  sheetActionButtonLabelActive: {
+    color: '#684208',
   },
-  optionChipHint: {
-    marginTop: 5,
-    color: '#93a7bf',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  optionChipHintActive: {
-    color: '#c7d6e6',
-  },
-  quoteCard: {
-    borderRadius: 28,
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    backgroundColor: '#101b2d',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  quoteEyebrow: {
-    color: '#f7b040',
-    fontSize: 12,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-  },
-  quoteText: {
-    marginTop: 10,
-    color: '#f9fbff',
-    fontSize: 20,
-    fontWeight: '900',
-    lineHeight: 28,
-  },
-  quoteFootnote: {
-    marginTop: 10,
-    color: '#93a7bf',
-    fontSize: 13,
-    lineHeight: 20,
+  sheetActionButtonLabelPrimary: {
+    color: '#fffaf2',
   },
 });
