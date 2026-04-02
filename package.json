@@ -5,11 +5,14 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
+    "android": "expo run:android",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "vendor:model-viewer": "node ./scripts/vendor-model-viewer.mjs",
+    "ios": "expo run:ios"
   },
   "dependencies": {
+    "@google/model-viewer": "^4.2.0",
     "expo": "~54.0.33",
     "expo-asset": "~12.0.12",
     "expo-audio": "~1.1.1",

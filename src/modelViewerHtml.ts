@@ -1,3 +1,5 @@
+import { modelViewerScript } from './vendor/modelViewerScript';
+
 export function createModelViewerHtml({
   modelUri,
   posterText,
@@ -13,6 +15,7 @@ export function createModelViewerHtml({
   const safePosterText = JSON.stringify(posterText);
   const safeAnimationSpeed = JSON.stringify(initialAnimationSpeed);
   const safeCameraOrbit = JSON.stringify(initialCameraOrbit);
+  const inlineModelViewerScript = modelViewerScript;
 
   return `
 <!doctype html>
@@ -101,7 +104,7 @@ export function createModelViewerHtml({
         background: transparent;
       }
     </style>
-    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+    <script>${inlineModelViewerScript}</script>
   </head>
   <body>
     <div class="shell">
