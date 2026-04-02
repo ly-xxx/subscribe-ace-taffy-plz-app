@@ -2,17 +2,17 @@ export const cameraPresets = [
   {
     id: 'full',
     label: '全景',
-    cameraOrbit: '180deg 68deg 4.65m',
+    cameraOrbit: '180deg 63.5deg 5.05m',
   },
   {
     id: 'mid',
     label: '半身',
-    cameraOrbit: '188deg 66deg 3.78m',
+    cameraOrbit: '188deg 60.8deg 4.08m',
   },
   {
     id: 'close',
     label: '近景',
-    cameraOrbit: '195deg 63deg 3.24m',
+    cameraOrbit: '194deg 57.8deg 3.44m',
   },
 ] as const;
 

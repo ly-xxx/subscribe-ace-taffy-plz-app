@@ -3,6 +3,7 @@ param(
     [string]$PmxPath = "",
     [string]$VmdPath = "",
     [string]$ExpressionVmdPath = "",
+    [int]$InstanceCount = 1,
     [string]$OutputPath = ".\assets\exports\taffy-laugh.glb"
 )
 
@@ -69,6 +70,7 @@ $env:NAIWA_PMX = $resolvedPmx
 $env:NAIWA_VMD = $resolvedVmd
 $env:NAIWA_EXTRA_VMD = ""
 $env:NAIWA_GLB_OUT = $resolvedOutput
+$env:NAIWA_INSTANCE_COUNT = [string]$InstanceCount
 
 if (-not [string]::IsNullOrWhiteSpace($ExpressionVmdPath)) {
     $env:NAIWA_EXTRA_VMD = Resolve-InputPath $ExpressionVmdPath
@@ -80,6 +82,7 @@ Write-Host "VMD:" $env:NAIWA_VMD
 if (-not [string]::IsNullOrWhiteSpace($env:NAIWA_EXTRA_VMD)) {
     Write-Host "Extra VMD:" $env:NAIWA_EXTRA_VMD
 }
+Write-Host "Instances:" $env:NAIWA_INSTANCE_COUNT
 Write-Host "Output:" $env:NAIWA_GLB_OUT
 
 & $BlenderExe --background --factory-startup --python-exit-code 1 --python $convertScript

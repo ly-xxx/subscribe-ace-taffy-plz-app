@@ -25,8 +25,9 @@
 1. 通过仓库内 vendored 的 `mmd_tools` addon 导入 PMX。
 2. 在脚本里自动把 `センター` 骨移动到更接近胯部的位置。
 3. 导入 `VMD` 动作。
-4. 导出一个包含模型、贴图、骨骼动画的 `GLB`。
-5. Expo 直接打包并播放这个 `GLB`。
+4. 导出一个包含模型、贴图、骨骼动画和 morph target 的 `GLB`。
+5. 追加执行一层 `GLB` 后处理，把移动端更容易出问题的透明材质模式修正回来。
+6. Expo 直接打包并播放这个 `GLB`。
 
 ## 一键转换
 
@@ -42,6 +43,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\blender\convert-taffy.ps1
 - 启用仓库内的 `tools/blender/addons/mmd_tools`
 - 读取默认 PMX 和 VMD
 - 输出 `assets/exports/taffy-laugh.glb`
+- 调用 `tools/gltf/patch-glb-materials.mjs` 修正导出后的材质 alpha mode
 
 如果你后面换模型或换动作，也可以给脚本传自定义参数。
 
@@ -55,6 +57,22 @@ powershell -ExecutionPolicy Bypass -File .\tools\blender\convert-taffy.ps1
 的平均值作为 `センター` 骨的新位置；如果缺失，则退回 `下半身.head`。
 
 这一步是为了把动作包要求的“重心改到胯部附近”固化进自动流程里，避免每次手工调骨。
+
+## 导出后的 GLB 修正
+
+当前仓库会在 Blender 导出结束后，再跑一层 `tools/gltf/patch-glb-materials.mjs`：
+
+- `Body`、`Ear` 被压成 `OPAQUE`
+- 大部分脸部、发丝、服饰、表情贴图材质会被压成 `MASK`
+- `Dark+Water` 保持 `BLEND`
+
+这样做是因为 Blender 导出落地到 glTF 时，原本更接近裁剪透明的材质会被统一写成 `BLEND`，在 Android WebGL 里很容易出现前后排序错乱。
+
+如果你想直接查看当前 `GLB` 的材质模式和 morph 数量，可以运行：
+
+```bash
+npm run inspect:glb
+```
 
 ## 为什么选 GLB
 
@@ -79,4 +97,5 @@ powershell -ExecutionPolicy Bypass -File .\tools\blender\convert-taffy.ps1
 结论是：
 
 - 主体动作已经足够做移动端原型
+- 当前这只塔菲模型本身带有 56 个 morph target，可用于后续做表情控制
 - 裙摆细节和部分面部表情不会完全复现原始 MMD 效果

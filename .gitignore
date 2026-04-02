@@ -11,10 +11,15 @@ expo-env.d.ts
 .metro-health-check*
 
 # Native / generated
-/android
 /ios
 .kotlin/
 *.orig.*
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/local.properties
+android/app/.cxx/
 
 # Logs
 npm-debug.*
@@ -43,3 +48,22 @@ tools/blender/inspect-output.json
 永雏塔菲.7z
 永雏塔菲-兔女郎.zip
 关注塔菲谢谢喵MMD动作.zip
+
+# Local captures / debug artifacts
+device-*.png
+naiwa-*.png
+orientation-grid.png
+window_dump.xml
+ecb2e2eaf1b698ede9ce97452acdc067.jpg
+屏幕截图 *.png
+
+# Experimental exports and duplicate local drops
+assets/exports/*-x3*.glb
+assets/exports/*-x6.glb
+assets/exports/*-x10.glb
+1_永雏塔菲逆天唐笑_(Vocals).wav
+奶龙捧腹大笑_by_白羽九_564cc44b03bb913e7630b87496b4535b.zip
+docs/assets/shot-hero.png
+docs/assets/shot-stage.png
+docs/assets/shot-action.png
+docs/assets/app-icon.png
