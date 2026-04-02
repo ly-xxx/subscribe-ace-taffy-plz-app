@@ -2,6 +2,7 @@ param(
     [string]$BlenderExe = "C:\Program Files\Blender Foundation\Blender 5.0\blender.exe",
     [string]$PmxPath = "",
     [string]$VmdPath = "",
+    [string]$ExpressionVmdPath = "",
     [string]$OutputPath = ".\assets\exports\taffy-laugh.glb"
 )
 
@@ -66,11 +67,22 @@ if (-not (Test-Path -LiteralPath $outputDir)) {
 $env:BLENDER_USER_SCRIPTS = $blenderScripts.Path
 $env:NAIWA_PMX = $resolvedPmx
 $env:NAIWA_VMD = $resolvedVmd
+$env:NAIWA_EXTRA_VMD = ""
 $env:NAIWA_GLB_OUT = $resolvedOutput
+
+if (-not [string]::IsNullOrWhiteSpace($ExpressionVmdPath)) {
+    $env:NAIWA_EXTRA_VMD = Resolve-InputPath $ExpressionVmdPath
+}
 
 Write-Host "Blender:" $BlenderExe
 Write-Host "PMX:" $env:NAIWA_PMX
 Write-Host "VMD:" $env:NAIWA_VMD
+if (-not [string]::IsNullOrWhiteSpace($env:NAIWA_EXTRA_VMD)) {
+    Write-Host "Extra VMD:" $env:NAIWA_EXTRA_VMD
+}
 Write-Host "Output:" $env:NAIWA_GLB_OUT
 
 & $BlenderExe --background --factory-startup --python-exit-code 1 --python $convertScript
+
+$glbPatchScript = Resolve-Path (Join-Path $repoRoot "tools\\gltf\\patch-glb-materials.mjs")
+node $glbPatchScript $resolvedOutput $resolvedOutput

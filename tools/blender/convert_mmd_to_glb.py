@@ -7,6 +7,34 @@ import addon_utils
 from mathutils import Vector
 
 
+def capture_material_settings(material):
+    alpha_threshold = getattr(material, "alpha_threshold", 0.5)
+    blend_method = getattr(material, "blend_method", "OPAQUE")
+    use_backface_culling = getattr(material, "use_backface_culling", False)
+
+    return {
+        "blend_method": blend_method,
+        "alpha_threshold": alpha_threshold,
+        "use_backface_culling": use_backface_culling,
+    }
+
+
+def restore_material_settings(material, settings):
+    blend_method = settings["blend_method"]
+    if blend_method == "HASHED":
+        # glTF has no hashed transparency; alpha clip is the closest stable mobile-friendly equivalent.
+        blend_method = "CLIP"
+
+    if hasattr(material, "blend_method"):
+        material.blend_method = blend_method
+
+    if hasattr(material, "alpha_threshold"):
+        material.alpha_threshold = settings["alpha_threshold"]
+
+    if hasattr(material, "use_backface_culling"):
+        material.use_backface_culling = settings["use_backface_culling"]
+
+
 def clear_scene():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
@@ -26,6 +54,36 @@ def enable_mmd_tools():
     addon_utils.enable("mmd_tools", default_set=True, persistent=True)
     if not addon_utils.check("mmd_tools")[1]:
         raise RuntimeError("mmd_tools addon is not enabled")
+
+
+def convert_mmd_materials():
+    from mmd_tools import cycles_converter
+
+    material_settings = {}
+    for material in bpy.data.materials:
+        material_settings[material.name] = capture_material_settings(material)
+
+    for obj in bpy.data.objects:
+        if obj.type != "MESH":
+            continue
+        if not any(mod.type == "ARMATURE" for mod in obj.modifiers):
+            continue
+        if not obj.material_slots:
+            continue
+
+        cycles_converter.convertToBlenderShader(
+            obj,
+            use_principled=True,
+            clean_nodes=True,
+            subsurface=0.0,
+        )
+
+    for material in bpy.data.materials:
+        settings = material_settings.get(material.name)
+        if settings is None:
+            continue
+
+        restore_material_settings(material, settings)
 
 
 def find_armature():
@@ -69,7 +127,7 @@ def move_center_bone_to_hip(armature_obj):
     bpy.ops.object.mode_set(mode="OBJECT")
 
 
-def import_motion(vmd_path):
+def import_motion(vmd_path, create_new_action):
     root_candidate = None
     for obj in bpy.data.objects:
         if hasattr(obj, "mmd_type") and getattr(obj, "mmd_type", "") == "ROOT":
@@ -91,7 +149,7 @@ def import_motion(vmd_path):
         use_pose_mode=False,
         use_mirror=False,
         update_scene_settings=True,
-        create_new_action=True,
+        create_new_action=create_new_action,
         use_nla=False,
     )
 
@@ -128,7 +186,9 @@ def export_glb(output_path):
         use_selection=True,
         export_animations=True,
         export_animation_mode="ACTIONS",
-        export_apply=True,
+        export_morph=True,
+        export_morph_animation=True,
+        export_apply=False,
         export_texcoords=True,
         export_normals=True,
         export_image_format="AUTO",
@@ -140,6 +200,9 @@ def main():
     pmx_path = os.environ["NAIWA_PMX"]
     vmd_path = os.environ["NAIWA_VMD"]
     glb_path = os.environ["NAIWA_GLB_OUT"]
+    extra_vmd_paths = [
+        path for path in os.environ.get("NAIWA_EXTRA_VMD", "").split(os.pathsep) if path
+    ]
 
     clear_scene()
     enable_mmd_tools()
@@ -151,9 +214,13 @@ def main():
         use_mipmap=False,
     )
 
+    convert_mmd_materials()
+
     armature_obj = find_armature()
     move_center_bone_to_hip(armature_obj)
-    import_motion(vmd_path)
+    import_motion(vmd_path, create_new_action=True)
+    for extra_vmd_path in extra_vmd_paths:
+        import_motion(extra_vmd_path, create_new_action=False)
     set_scene_frame_range()
     export_glb(glb_path)
 

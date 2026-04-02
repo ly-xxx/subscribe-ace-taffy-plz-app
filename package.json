@@ -8,20 +8,21 @@
     "android": "expo run:android",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "vendor:model-viewer": "node ./scripts/vendor-model-viewer.mjs",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "convert:taffy": "powershell -ExecutionPolicy Bypass -File .\\tools\\blender\\convert-taffy.ps1",
+    "inspect:glb": "node .\\tools\\gltf\\inspect-glb.mjs .\\assets\\exports\\taffy-laugh.glb"
   },
   "dependencies": {
-    "@google/model-viewer": "^4.2.0",
     "expo": "~54.0.33",
     "expo-asset": "~12.0.12",
-    "expo-audio": "~1.1.1",
+    "expo-file-system": "~19.0.21",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-webview": "13.15.0"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.3.0",
     "@types/react": "~19.1.0",
     "typescript": "~5.9.2"
   }

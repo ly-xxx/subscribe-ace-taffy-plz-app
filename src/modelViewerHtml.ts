@@ -2,16 +2,19 @@ import { modelViewerScript } from './vendor/modelViewerScript';
 
 export function createModelViewerHtml({
   modelUri,
+  audioUri,
   posterText,
   initialAnimationSpeed,
   initialCameraOrbit,
 }: {
   modelUri: string | null;
+  audioUri: string | null;
   posterText: string;
   initialAnimationSpeed: number;
   initialCameraOrbit: string;
 }) {
   const safeModelUri = modelUri ? JSON.stringify(modelUri) : 'null';
+  const safeAudioUri = audioUri ? JSON.stringify(audioUri) : 'null';
   const safePosterText = JSON.stringify(posterText);
   const safeAnimationSpeed = JSON.stringify(initialAnimationSpeed);
   const safeCameraOrbit = JSON.stringify(initialCameraOrbit);
@@ -29,14 +32,15 @@ export function createModelViewerHtml({
     <style>
       :root {
         color-scheme: light;
-        --bg: #faf6ef;
-        --bg-soft: #fffdf9;
-        --warm: rgba(255, 214, 152, 0.88);
-        --warm-soft: rgba(255, 229, 194, 0.6);
-        --cool: rgba(214, 226, 255, 0.5);
-        --floor: rgba(63, 44, 17, 0.22);
+        --bg: #fff9fb;
+        --bg-soft: #ffffff;
+        --warm: rgba(255, 226, 235, 0.44);
+        --warm-soft: rgba(255, 231, 239, 0.34);
+        --cool: rgba(251, 241, 246, 0.28);
+        --floor: rgba(63, 44, 17, 0.28);
         --text: #23170d;
         --muted: #7f6a53;
+        --pulse: 0;
       }
 
       html,
@@ -46,9 +50,10 @@ export function createModelViewerHtml({
         height: 100%;
         overflow: hidden;
         background:
-          radial-gradient(circle at 18% 12%, rgba(255, 221, 171, 0.5), transparent 30%),
-          radial-gradient(circle at 84% 24%, rgba(223, 233, 255, 0.42), transparent 28%),
-          linear-gradient(180deg, #fffdf8 0%, var(--bg) 54%, #f8f1e6 100%);
+          radial-gradient(circle at 18% 12%, rgba(255, 229, 236, 0.28), transparent 30%),
+          radial-gradient(circle at 82% 18%, rgba(255, 240, 246, 0.2), transparent 26%),
+          radial-gradient(circle at 50% 116%, rgba(255, 220, 232, 0.18), transparent 30%),
+          linear-gradient(180deg, var(--bg-soft) 0%, #fffbfd 34%, var(--bg) 74%, #fff6fa 100%);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
 
@@ -57,50 +62,65 @@ export function createModelViewerHtml({
         width: 100%;
         height: 100%;
         overflow: hidden;
+        transform: translate3d(0, calc(var(--pulse) * -2.4px), 0);
       }
 
       .light {
         position: absolute;
         border-radius: 999px;
         pointer-events: none;
-        filter: blur(26px);
+        filter: blur(34px);
         mix-blend-mode: screen;
+        transition: transform 180ms linear, opacity 180ms linear;
       }
 
       .light-key {
-        top: -8%;
-        left: -10%;
-        width: 68%;
-        height: 38%;
-        background: radial-gradient(circle at 58% 58%, var(--warm), transparent 70%);
+        top: -10%;
+        left: -8%;
+        width: 70%;
+        height: 30%;
+        background: radial-gradient(circle at 58% 58%, var(--warm), transparent 74%);
       }
 
       .light-fill {
-        top: 6%;
+        top: 4%;
         right: -18%;
-        width: 56%;
-        height: 30%;
-        background: radial-gradient(circle at 34% 48%, var(--cool), transparent 70%);
+        width: 58%;
+        height: 28%;
+        background: radial-gradient(circle at 34% 48%, var(--cool), transparent 74%);
       }
 
       .light-bounce {
-        left: 10%;
-        right: 10%;
-        bottom: -8%;
-        height: 26%;
-        background: radial-gradient(circle at 50% 24%, var(--warm-soft), transparent 74%);
+        left: 6%;
+        right: 6%;
+        bottom: -10%;
+        height: 30%;
+        background: radial-gradient(circle at 50% 24%, var(--warm-soft), transparent 78%);
       }
 
       .floor-shadow {
         position: absolute;
-        left: 12%;
-        right: 12%;
-        bottom: 4%;
-        height: 16%;
+        left: 14%;
+        right: 14%;
+        bottom: 6%;
+        height: 18%;
         border-radius: 999px;
         background:
-          radial-gradient(circle at 50% 45%, rgba(44, 31, 12, 0.3) 0%, rgba(44, 31, 12, 0.16) 30%, transparent 72%);
-        filter: blur(24px);
+          radial-gradient(circle at 50% 45%, rgba(44, 31, 12, 0.36) 0%, rgba(44, 31, 12, 0.2) 32%, transparent 74%);
+        filter: blur(26px);
+        pointer-events: none;
+        transition: transform 180ms linear, opacity 180ms linear;
+      }
+
+      .floor-contact {
+        position: absolute;
+        left: 24%;
+        right: 24%;
+        bottom: 9.4%;
+        height: 9%;
+        border-radius: 999px;
+        background: radial-gradient(circle at 50% 50%, rgba(48, 34, 12, 0.34), transparent 74%);
+        filter: blur(20px);
         pointer-events: none;
       }
 
@@ -150,20 +170,23 @@ export function createModelViewerHtml({
         height: 100%;
         background: transparent;
         --poster-color: transparent;
+        filter: saturate(1.24) contrast(1.12) brightness(0.985);
       }
     </style>
     <script>${inlineModelViewerScript}</script>
   </head>
   <body>
-    <div class="stage">
-      <div class="light light-key"></div>
-      <div class="light light-fill"></div>
-      <div class="light light-bounce"></div>
-      <div class="floor-shadow"></div>
+    <div class="stage" id="stageRoot">
+      <div class="light light-key" id="lightKey"></div>
+      <div class="light light-fill" id="lightFill"></div>
+      <div class="light light-bounce" id="lightBounce"></div>
+      <div class="floor-shadow" id="floorShadow"></div>
+      <div class="floor-contact" id="floorContact"></div>
       <div class="viewer-frame" id="app"></div>
     </div>
     <script>
       const modelUri = ${safeModelUri};
+      const audioUri = ${safeAudioUri};
       const posterText = ${safePosterText};
       const initialAnimationSpeed = ${safeAnimationSpeed};
       const initialCameraOrbit = ${safeCameraOrbit};
@@ -172,19 +195,38 @@ export function createModelViewerHtml({
       const BLEND_MATERIALS = new Set(['Dark+Water']);
       const HAIR_MATERIALS = new Set(['MaWei_x2', 'Hair_CeFa', 'Hair_LiuHai']);
       const ACCENT_MATERIALS = new Set(['Glass+Toy+Bow', 'Star+Red', 'Dark+Water']);
-      const DEFAULT_CAMERA_TARGET = '0m 0.88m 0m';
+      const DEFAULT_CAMERA_TARGET = '0m 0.96m 0m';
       const FRONT_FACING_ROTATION_Y = Math.PI;
+      const MODEL_VERTICAL_OFFSET = -0.08;
+      const AUTO_TARGET_RATIO = 0.82;
 
       const app = document.getElementById('app');
+      const stageRoot = document.getElementById('stageRoot');
+      const lightKey = document.getElementById('lightKey');
+      const lightFill = document.getElementById('lightFill');
+      const lightBounce = document.getElementById('lightBounce');
+      const floorShadowEl = document.getElementById('floorShadow');
+      const floorContactEl = document.getElementById('floorContact');
 
       let currentBlobUrl = null;
+      let audioBlobUrl = null;
       let internalSceneHandle = null;
       let internalSceneRoot = null;
       let morphBindings = [];
       let morphAnimationHandle = null;
+      let playbackMonitorHandle = null;
       let baseExpressionWeights = Object.create(null);
       let autoCameraTarget = DEFAULT_CAMERA_TARGET;
       let selectedAnimationName = '';
+      let isLooping = true;
+      let currentAnimationDuration = 0;
+      let visualEnergy = 0;
+      let lastPlaybackStatus = '';
+      let lastPlaybackStatusAt = 0;
+      let audioElement = null;
+      let audioContext = null;
+      let audioAnalyser = null;
+      let audioDataArray = null;
 
       function notify(type, detail) {
         if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -204,7 +246,15 @@ export function createModelViewerHtml({
         return String(Number(value.toFixed(4))) + 'm';
       }
 
-      function releaseBlobUrl() {
+      function releaseBlobUrl(kind) {
+        if (kind === 'audio') {
+          if (audioBlobUrl) {
+            URL.revokeObjectURL(audioBlobUrl);
+            audioBlobUrl = null;
+          }
+          return;
+        }
+
         if (currentBlobUrl) {
           URL.revokeObjectURL(currentBlobUrl);
           currentBlobUrl = null;
@@ -215,6 +265,13 @@ export function createModelViewerHtml({
         if (morphAnimationHandle) {
           cancelAnimationFrame(morphAnimationHandle);
           morphAnimationHandle = null;
+        }
+      }
+
+      function stopPlaybackMonitor() {
+        if (playbackMonitorHandle) {
+          cancelAnimationFrame(playbackMonitorHandle);
+          playbackMonitorHandle = null;
         }
       }
 
@@ -246,20 +303,30 @@ export function createModelViewerHtml({
         });
       }
 
-      async function resolveModelSource(uri) {
-        releaseBlobUrl();
+      async function resolveAssetSource(uri, kind, label) {
+        releaseBlobUrl(kind);
 
         try {
           const blob = await fetchBlobWithFetch(uri);
-          currentBlobUrl = URL.createObjectURL(blob);
-          notify('viewer-loading', '已通过 fetch 预读本地 GLB。');
-          return currentBlobUrl;
+          const blobUrl = URL.createObjectURL(blob);
+          if (kind === 'audio') {
+            audioBlobUrl = blobUrl;
+          } else {
+            currentBlobUrl = blobUrl;
+          }
+          notify('viewer-loading', '已通过 fetch 预读本地' + label + '。');
+          return blobUrl;
         } catch (fetchError) {
           try {
             const blob = await fetchBlobWithXhr(uri);
-            currentBlobUrl = URL.createObjectURL(blob);
-            notify('viewer-loading', '已通过 XHR 预读本地 GLB。');
-            return currentBlobUrl;
+            const blobUrl = URL.createObjectURL(blob);
+            if (kind === 'audio') {
+              audioBlobUrl = blobUrl;
+            } else {
+              currentBlobUrl = blobUrl;
+            }
+            notify('viewer-loading', '已通过 XHR 预读本地' + label + '。');
+            return blobUrl;
           } catch (xhrError) {
             const fetchMessage =
               fetchError && typeof fetchError.message === 'string'
@@ -272,6 +339,75 @@ export function createModelViewerHtml({
             throw new Error('fetch=' + fetchMessage + '; xhr=' + xhrMessage);
           }
         }
+      }
+
+      function teardownAudio() {
+        if (audioElement) {
+          audioElement.pause();
+          audioElement.src = '';
+          audioElement.load();
+          audioElement = null;
+        }
+
+        if (audioContext && typeof audioContext.close === 'function') {
+          audioContext.close().catch(() => {});
+        }
+
+        audioContext = null;
+        audioAnalyser = null;
+        audioDataArray = null;
+        releaseBlobUrl('audio');
+      }
+
+      async function prepareAudioTransport(resolvedAudioUri) {
+        teardownAudio();
+
+        if (!resolvedAudioUri) {
+          return null;
+        }
+
+        const audio = new Audio(resolvedAudioUri);
+        audio.preload = 'auto';
+        audio.loop = isLooping;
+        audio.playsInline = true;
+        audio.crossOrigin = 'anonymous';
+
+        const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextCtor) {
+          try {
+            audioContext = new AudioContextCtor();
+            const source = audioContext.createMediaElementSource(audio);
+            audioAnalyser = audioContext.createAnalyser();
+            audioAnalyser.fftSize = 128;
+            source.connect(audioAnalyser);
+            audioAnalyser.connect(audioContext.destination);
+            audioDataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
+          } catch {
+            audioContext = null;
+            audioAnalyser = null;
+            audioDataArray = null;
+          }
+        }
+
+        audioElement = audio;
+        audio.addEventListener('ended', () => {
+          const viewer = getViewer();
+          if (viewer && !isLooping) {
+            viewer.pause();
+          }
+          sendPlaybackStatus(true);
+        });
+        audio.addEventListener('pause', () => {
+          sendPlaybackStatus(true);
+        });
+        audio.addEventListener('play', () => {
+          sendPlaybackStatus(true);
+        });
+        audio.addEventListener('loadedmetadata', () => {
+          sendPlaybackStatus(true);
+        });
+
+        return audio;
       }
 
       function applyConfig(config) {
@@ -293,6 +429,127 @@ export function createModelViewerHtml({
         if (typeof config.animationSpeed === 'number' && Number.isFinite(config.animationSpeed)) {
           viewer.timeScale = config.animationSpeed;
         }
+
+        if (typeof config.isLooping === 'boolean') {
+          isLooping = config.isLooping;
+          if (audioElement) {
+            audioElement.loop = isLooping;
+          }
+        }
+      }
+
+      function readVisualEnergy() {
+        if (!audioAnalyser || !audioDataArray) {
+          if (audioElement && !audioElement.paused) {
+            return 0.08 + Math.max(0, Math.sin(audioElement.currentTime * 3.6)) * 0.08;
+          }
+          return 0;
+        }
+
+        audioAnalyser.getByteFrequencyData(audioDataArray);
+        let total = 0;
+        const count = Math.min(12, audioDataArray.length);
+        for (let index = 0; index < count; index += 1) {
+          total += audioDataArray[index];
+        }
+        return count > 0 ? total / count / 255 : 0;
+      }
+
+      function paintStudio() {
+        visualEnergy = visualEnergy * 0.82 + readVisualEnergy() * 0.18;
+        document.documentElement.style.setProperty('--pulse', visualEnergy.toFixed(4));
+
+        if (stageRoot) {
+          stageRoot.style.transform =
+            'translate3d(0,' + String((-visualEnergy * 2.4).toFixed(2)) + 'px,0)';
+        }
+        if (lightKey) {
+          lightKey.style.opacity = String(0.9 + visualEnergy * 0.16);
+          lightKey.style.transform = 'scale(' + String((1 + visualEnergy * 0.025).toFixed(4)) + ')';
+        }
+        if (lightFill) {
+          lightFill.style.opacity = String(0.86 + visualEnergy * 0.1);
+          lightFill.style.transform = 'scale(' + String((1 + visualEnergy * 0.018).toFixed(4)) + ')';
+        }
+        if (lightBounce) {
+          lightBounce.style.opacity = String(0.88 + visualEnergy * 0.12);
+        }
+        if (floorShadowEl) {
+          floorShadowEl.style.transform = 'scale(' + String((1 + visualEnergy * 0.018).toFixed(4)) + ')';
+          floorShadowEl.style.opacity = String(0.88 + visualEnergy * 0.12);
+        }
+        if (floorContactEl) {
+          floorContactEl.style.transform = 'scale(' + String((1 + visualEnergy * 0.025).toFixed(4)) + ')';
+        }
+      }
+
+      function buildPlaybackStatus() {
+        const duration =
+          audioElement && Number.isFinite(audioElement.duration) ? audioElement.duration : currentAnimationDuration;
+        const currentTime =
+          audioElement && Number.isFinite(audioElement.currentTime) ? audioElement.currentTime : 0;
+        const progress = duration > 0 ? clamp01(currentTime / duration) : 0;
+        const playing = Boolean(audioElement && !audioElement.paused && !audioElement.ended);
+
+        return {
+          playing,
+          progress,
+          currentTime,
+          duration,
+          energy: visualEnergy,
+          didFinish: !playing && duration > 0 && currentTime >= duration - 0.03,
+        };
+      }
+
+      function sendPlaybackStatus(force) {
+        const status = buildPlaybackStatus();
+        const snapshot = JSON.stringify(status);
+        const now = performance.now();
+        if (!force && snapshot === lastPlaybackStatus && now - lastPlaybackStatusAt < 140) {
+          return;
+        }
+        lastPlaybackStatus = snapshot;
+        lastPlaybackStatusAt = now;
+        notify('playback-status', status);
+      }
+
+      function syncViewerToAudio() {
+        const viewer = getViewer();
+        if (!viewer || !audioElement) {
+          return;
+        }
+
+        if (currentAnimationDuration > 0 && audioElement.currentTime >= currentAnimationDuration) {
+          if (isLooping) {
+            audioElement.currentTime = 0;
+            viewer.currentTime = 0;
+          } else {
+            audioElement.pause();
+            audioElement.currentTime = currentAnimationDuration;
+            viewer.pause();
+            viewer.currentTime = currentAnimationDuration;
+          }
+        }
+
+        if (!audioElement.paused) {
+          const drift = Math.abs(viewer.currentTime - audioElement.currentTime);
+          if (drift > 0.033) {
+            viewer.currentTime = audioElement.currentTime;
+          }
+        }
+      }
+
+      function startPlaybackMonitor() {
+        stopPlaybackMonitor();
+
+        const tick = () => {
+          syncViewerToAudio();
+          paintStudio();
+          sendPlaybackStatus(false);
+          playbackMonitorHandle = requestAnimationFrame(tick);
+        };
+
+        tick();
       }
 
       function materialModeForName(name) {
@@ -332,7 +589,7 @@ export function createModelViewerHtml({
         }
 
         if ('roughness' in material) {
-          material.roughness = isAccent ? 0.34 : isHair ? 0.76 : 0.9;
+          material.roughness = isAccent ? 0.34 : isHair ? 0.68 : 0.74;
         }
 
         if ('metalness' in material) {
@@ -340,7 +597,7 @@ export function createModelViewerHtml({
         }
 
         if ('envMapIntensity' in material) {
-          material.envMapIntensity = isAccent ? 1.75 : isHair ? 1.15 : 0.86;
+          material.envMapIntensity = isAccent ? 0.72 : isHair ? 0.46 : 0.36;
         }
 
         material.side = 2;
@@ -602,10 +859,11 @@ export function createModelViewerHtml({
           return;
         }
 
+        const height = bounds.max.y - bounds.min.y;
         autoCameraTarget =
           formatMeters(bounds.center.x) +
           ' ' +
-          formatMeters(bounds.center.y) +
+          formatMeters(bounds.min.y + height * AUTO_TARGET_RATIO) +
           ' ' +
           formatMeters(bounds.center.z);
 
@@ -627,6 +885,10 @@ export function createModelViewerHtml({
 
         if (internalSceneRoot.rotation) {
           internalSceneRoot.rotation.y = FRONT_FACING_ROTATION_Y;
+        }
+
+        if (internalSceneRoot.position) {
+          internalSceneRoot.position.y = MODEL_VERTICAL_OFFSET;
         }
 
         internalSceneRoot.traverse((node) => {
@@ -654,7 +916,17 @@ export function createModelViewerHtml({
         };
       }
 
-      function playFromStart(config) {
+      async function ensureAudioRunning() {
+        if (audioContext && audioContext.state === 'suspended') {
+          try {
+            await audioContext.resume();
+          } catch {
+            // Some WebViews reject resume until after a gesture.
+          }
+        }
+      }
+
+      async function playFromStart(config) {
         const viewer = getViewer();
         if (!viewer) {
           return;
@@ -668,10 +940,21 @@ export function createModelViewerHtml({
 
         viewer.pause();
         viewer.currentTime = 0;
+
+        if (audioElement) {
+          await ensureAudioRunning();
+          audioElement.currentTime = 0;
+          audioElement.loop = isLooping;
+          audioElement.play().catch(() => {
+            sendPlaybackStatus(true);
+          });
+        }
+
         viewer.play();
+        sendPlaybackStatus(true);
       }
 
-      function resume(config) {
+      async function resume(config) {
         const viewer = getViewer();
         if (!viewer) {
           return;
@@ -683,7 +966,16 @@ export function createModelViewerHtml({
           setExpressionWeights(config.expressionWeights);
         }
 
+        if (audioElement) {
+          await ensureAudioRunning();
+          audioElement.loop = isLooping;
+          audioElement.play().catch(() => {
+            sendPlaybackStatus(true);
+          });
+        }
+
         viewer.play();
+        sendPlaybackStatus(true);
       }
 
       function pauseViewer() {
@@ -692,7 +984,12 @@ export function createModelViewerHtml({
           return;
         }
 
+        if (audioElement) {
+          audioElement.pause();
+        }
+
         viewer.pause();
+        sendPlaybackStatus(true);
       }
 
       function stopViewer() {
@@ -701,9 +998,15 @@ export function createModelViewerHtml({
           return;
         }
 
+        if (audioElement) {
+          audioElement.pause();
+          audioElement.currentTime = 0;
+        }
+
         viewer.pause();
         viewer.currentTime = 0;
         applyExpressionWeights();
+        sendPlaybackStatus(true);
       }
 
       function handleBridgeEvent(event) {
@@ -754,7 +1057,9 @@ export function createModelViewerHtml({
 
       window.addEventListener('beforeunload', () => {
         stopMorphLoop();
-        releaseBlobUrl();
+        stopPlaybackMonitor();
+        teardownAudio();
+        releaseBlobUrl('model');
       });
 
       async function mountViewer() {
@@ -771,17 +1076,25 @@ export function createModelViewerHtml({
           return;
         }
 
-        notify('viewer-loading', '离线舞台已启动，正在读取本地 GLB。');
+        notify('viewer-loading', '离线舞台已启动，正在读取本地 GLB 与配乐。');
 
         let resolvedModelUri = modelUri;
+        let resolvedAudioUri = null;
         try {
-          resolvedModelUri = await resolveModelSource(modelUri);
+          const resolved = await Promise.all([
+            resolveAssetSource(modelUri, 'model', 'GLB'),
+            audioUri ? resolveAssetSource(audioUri, 'audio', '音频') : Promise.resolve(null),
+          ]);
+          resolvedModelUri = resolved[0];
+          resolvedAudioUri = resolved[1];
         } catch (error) {
           const message =
             error && typeof error.message === 'string' ? error.message : String(error);
-          notify('viewer-error', '本地 GLB 预读失败：' + message);
+          notify('viewer-error', '本地资源预读失败：' + message);
           return;
         }
+
+        await prepareAudioTransport(resolvedAudioUri);
 
         app.innerHTML = \`
           <model-viewer
@@ -792,13 +1105,13 @@ export function createModelViewerHtml({
             disable-pan
             camera-orbit="\${initialCameraOrbit}"
             camera-target="\${DEFAULT_CAMERA_TARGET}"
-            field-of-view="20deg"
-            min-camera-orbit="auto 56deg 1.3m"
-            max-camera-orbit="auto 88deg 4.4m"
+            field-of-view="24deg"
+            min-camera-orbit="auto 54deg 2.1m"
+            max-camera-orbit="auto 84deg 6.2m"
             interaction-prompt="none"
-            shadow-intensity="1.05"
-            shadow-softness="0.6"
-            exposure="1.28"
+            shadow-intensity="1.18"
+            shadow-softness="0.4"
+            exposure="0.98"
             tone-mapping="agx"
             environment-image="neutral"
           ></model-viewer>
@@ -814,6 +1127,10 @@ export function createModelViewerHtml({
         viewer.addEventListener('load', () => {
           const animationCount = selectPrimaryAnimation(viewer);
           const sceneInfo = stabilizeSceneGraph(viewer);
+          currentAnimationDuration =
+            typeof viewer.duration === 'number' && Number.isFinite(viewer.duration)
+              ? viewer.duration
+              : 0;
           applyConfig({
             animationSpeed: initialAnimationSpeed,
             cameraOrbit: initialCameraOrbit,
@@ -821,6 +1138,8 @@ export function createModelViewerHtml({
           viewer.pause();
           viewer.currentTime = 0;
           setExpressionWeights(baseExpressionWeights);
+          startPlaybackMonitor();
+          sendPlaybackStatus(true);
 
           const rect = viewer.getBoundingClientRect();
 
@@ -834,6 +1153,8 @@ export function createModelViewerHtml({
               animationCount +
               '，morph ' +
               sceneInfo.morphTargetCount +
+              '，时长 ' +
+              Math.round(currentAnimationDuration * 10) / 10 +
               '。',
             sceneFound: sceneInfo.sceneFound,
             morphTargetCount: sceneInfo.morphTargetCount,

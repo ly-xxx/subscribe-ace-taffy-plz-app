@@ -1,21 +1,25 @@
 {
   "expo": {
-    "name": "Naiwa MMD Player",
+    "name": "唐氏驾到",
     "slug": "naiwa-mmd-player",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "icon": "./Gemini_Generated_Image_szidjvszidjvszid.png",
     "assetBundlePatterns": [
       "**/*"
     ],
     "android": {
       "package": "com.example.naiwa",
+      "adaptiveIcon": {
+        "foregroundImage": "./Gemini_Generated_Image_szidjvszidjvszid.png",
+        "backgroundColor": "#08111a"
+      },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "plugins": [
-      "expo-audio",
       "expo-asset"
     ]
   }
