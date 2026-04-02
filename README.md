@@ -10,7 +10,9 @@
 
 - 已导出可用的 `GLB`：`assets/exports/taffy-laugh.glb`
 - 已接入配乐：`assets/mmd/taffy_motion/关注塔菲谢谢喵MMD动作/关注塔菲谢谢喵.mp3`
-- Expo 原型可以点击重播音频，并重建 3D 视图来重播模型动画
+- Expo 原型已经具备一个可操作的“狂笑播放台”
+- 支持开播、暂停、归零、连播、分享文案
+- 支持切换镜头机位和狂笑强度，并同步控制音频速率与模型动画速率
 - 已保留 Blender 转换脚本，后续可以继续换模型、换动作再导出
 
 ## 为什么不用直接执行 MMD
@@ -60,3 +62,4 @@ powershell -ExecutionPolicy Bypass -File .\tools\blender\convert-taffy.ps1
 - VMD 导入时缺少不少 `Skirt_*` 骨骼，对裙摆细节有影响
 - 也缺少一批当前模型并不存在的表情 morph，所以脸部不会完全还原原始 MMD
 - 现在的 `GLB` 已经够做移动端原型，但还不是 1:1 的 MMD 完整复刻
+- 当前 `WebView` 里的 `model-viewer` 运行脚本还是从 `unpkg` 加载，首次打开时需要网络；如果后面要做离线包或正式发布，建议把这部分改成仓库内本地资源

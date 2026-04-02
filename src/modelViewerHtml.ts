@@ -1,12 +1,18 @@
 export function createModelViewerHtml({
   modelUri,
   posterText,
+  initialAnimationSpeed,
+  initialCameraOrbit,
 }: {
   modelUri: string | null;
   posterText: string;
+  initialAnimationSpeed: number;
+  initialCameraOrbit: string;
 }) {
   const safeModelUri = modelUri ? JSON.stringify(modelUri) : 'null';
   const safePosterText = JSON.stringify(posterText);
+  const safeAnimationSpeed = JSON.stringify(initialAnimationSpeed);
+  const safeCameraOrbit = JSON.stringify(initialCameraOrbit);
 
   return `
 <!doctype html>
@@ -20,9 +26,10 @@ export function createModelViewerHtml({
     <style>
       :root {
         color-scheme: dark;
-        --bg: #0c1220;
-        --panel: #111a2d;
-        --accent: #ffd369;
+        --bg: #08111a;
+        --panel: rgba(10, 18, 30, 0.96);
+        --glow: rgba(247, 176, 64, 0.14);
+        --grid: rgba(255, 255, 255, 0.05);
         --text: #f7f7f7;
         --muted: #a9b4c8;
       }
@@ -32,23 +39,25 @@ export function createModelViewerHtml({
         height: 100%;
         overflow: hidden;
         background:
-          radial-gradient(circle at top, rgba(255, 211, 105, 0.14), transparent 34%),
-          linear-gradient(180deg, #101828 0%, var(--bg) 100%);
+          radial-gradient(circle at top, var(--glow), transparent 36%),
+          linear-gradient(180deg, #0d1829 0%, var(--bg) 100%);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
       .shell {
         width: 100%;
         height: 100%;
-        display: flex;
-        align-items: stretch;
-        justify-content: stretch;
-      }
-      .panel {
         position: relative;
-        width: 100%;
-        height: 100%;
-        border: 1px solid rgba(255,255,255,0.06);
-        background: linear-gradient(180deg, rgba(17,26,45,0.92), rgba(11,18,32,0.98));
+        overflow: hidden;
+      }
+      .grid {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(var(--grid) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+        background-size: 32px 32px;
+        mask-image: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.95) 26%, rgba(0,0,0,0.95) 100%);
+        pointer-events: none;
       }
       .placeholder {
         position: absolute;
@@ -62,14 +71,14 @@ export function createModelViewerHtml({
       }
       .placeholder-card {
         max-width: 340px;
-        padding: 20px 18px;
+        padding: 22px 18px;
         border-radius: 24px;
-        background: rgba(255,255,255,0.04);
-        box-shadow: 0 18px 64px rgba(0,0,0,0.26);
+        background: rgba(255,255,255,0.05);
+        box-shadow: 0 18px 64px rgba(0,0,0,0.3);
         backdrop-filter: blur(12px);
       }
       .eyebrow {
-        color: var(--accent);
+        color: #ffd892;
         font-size: 12px;
         letter-spacing: 0.18em;
         text-transform: uppercase;
@@ -91,31 +100,124 @@ export function createModelViewerHtml({
         --poster-color: transparent;
         background: transparent;
       }
-      .badge {
-        position: absolute;
-        left: 14px;
-        top: 14px;
-        padding: 7px 10px;
-        border-radius: 999px;
-        background: rgba(0, 0, 0, 0.32);
-        color: #f5e9b9;
-        font-size: 12px;
-        letter-spacing: 0.05em;
-      }
     </style>
     <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   </head>
   <body>
     <div class="shell">
-      <div class="panel">
-        <div class="badge">MMD -> GLB Viewer</div>
-        <div id="app"></div>
-      </div>
+      <div id="app"></div>
+      <div class="grid"></div>
     </div>
     <script>
       const modelUri = ${safeModelUri};
       const posterText = ${safePosterText};
+      const initialAnimationSpeed = ${safeAnimationSpeed};
+      const initialCameraOrbit = ${safeCameraOrbit};
       const app = document.getElementById('app');
+
+      function notify(type) {
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type }));
+        }
+      }
+
+      function getViewer() {
+        return document.getElementById('viewer');
+      }
+
+      function applyConfig(config) {
+        const viewer = getViewer();
+        if (!viewer || !config) {
+          return;
+        }
+
+        if (typeof config.cameraOrbit === 'string') {
+          viewer.setAttribute('camera-orbit', config.cameraOrbit);
+        }
+
+        if (typeof config.animationSpeed === 'number' && Number.isFinite(config.animationSpeed)) {
+          viewer.timeScale = config.animationSpeed;
+        }
+      }
+
+      function playFromStart(config) {
+        const viewer = getViewer();
+        if (!viewer) {
+          return;
+        }
+
+        applyConfig(config);
+        viewer.pause();
+        viewer.currentTime = 0;
+        viewer.play();
+      }
+
+      function resume(config) {
+        const viewer = getViewer();
+        if (!viewer) {
+          return;
+        }
+
+        applyConfig(config);
+        viewer.play();
+      }
+
+      function pauseViewer() {
+        const viewer = getViewer();
+        if (!viewer) {
+          return;
+        }
+
+        viewer.pause();
+      }
+
+      function stopViewer() {
+        const viewer = getViewer();
+        if (!viewer) {
+          return;
+        }
+
+        viewer.pause();
+        viewer.currentTime = 0;
+      }
+
+      function handleBridgeEvent(event) {
+        try {
+          const payload = JSON.parse(event.data);
+          if (!payload || typeof payload.type !== 'string') {
+            return;
+          }
+
+          if (payload.type === 'configure') {
+            applyConfig(payload);
+            return;
+          }
+
+          if (payload.type === 'playFromStart') {
+            playFromStart(payload);
+            return;
+          }
+
+          if (payload.type === 'resume') {
+            resume(payload);
+            return;
+          }
+
+          if (payload.type === 'pause') {
+            pauseViewer();
+            return;
+          }
+
+          if (payload.type === 'stop') {
+            stopViewer();
+          }
+        } catch {
+          // Ignore malformed bridge messages.
+        }
+      }
+
+      window.addEventListener('message', handleBridgeEvent);
+      document.addEventListener('message', handleBridgeEvent);
 
       if (!modelUri) {
         app.innerHTML = \`
@@ -127,19 +229,39 @@ export function createModelViewerHtml({
             </div>
           </div>
         \`;
+        notify('viewer-error');
       } else {
         app.innerHTML = \`
           <model-viewer
             id="viewer"
             src="\${modelUri}"
             camera-controls
-            autoplay
             interaction-prompt="none"
-            shadow-intensity="0.8"
+            shadow-intensity="0.82"
             exposure="1.0"
             environment-image="neutral"
           ></model-viewer>
         \`;
+
+        const viewer = getViewer();
+
+        if (!viewer) {
+          notify('viewer-error');
+        } else {
+          viewer.addEventListener('load', () => {
+            applyConfig({
+              animationSpeed: initialAnimationSpeed,
+              cameraOrbit: initialCameraOrbit,
+            });
+            viewer.pause();
+            viewer.currentTime = 0;
+            notify('viewer-ready');
+          });
+
+          viewer.addEventListener('error', () => {
+            notify('viewer-error');
+          });
+        }
       }
     </script>
   </body>
