@@ -70,12 +70,15 @@ android/app/build/outputs/apk/release/app-release.apk
 - `docs/styles.css`
 - `docs/script.js`
 - `.github/workflows/deploy-pages.yml`
+- `.github/workflows/build-android.yml`
 
 如果你把仓库推到 GitHub：
 
 1. 启用 Actions / Pages
 2. 推送 `master`
 3. 工作流会自动把 `docs/` 发布到 GitHub Pages
+
+如果你想直接在 GitHub 上产出 APK，也可以在 `Actions` 里运行 `Build Android APK`，成功后会把 `release apk` 作为 artifact 提供下载。
 
 最终地址通常是：
 
