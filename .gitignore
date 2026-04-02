@@ -1,0 +1,39 @@
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Metro
+.metro-health-check*
+
+# Native / generated
+/android
+/ios
+.kotlin/
+*.orig.*
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Local environment
+.env*.local
+*.pem
+*.tsbuildinfo
+
+# Workspace artifacts
+_inspect_zip/
+_expo_template/
+
+# OS files
+.DS_Store
+
+# Optional raw archives kept outside the working asset pipeline
+永雏塔菲.7z
+永雏塔菲-兔女郎.zip
+关注塔菲谢谢喵MMD动作.zip

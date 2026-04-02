@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Naiwa MMD Player",
+    "slug": "naiwa-mmd-player",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "android": {
+      "package": "com.example.naiwa",
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-audio",
+      "expo-asset"
+    ]
+  }
+}
