@@ -9,6 +9,9 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "ios": "expo run:ios",
+    "build:debug:apk": "powershell -ExecutionPolicy Bypass -File .\\scripts\\build-debug-apk.ps1",
+    "build:release:apk": "powershell -ExecutionPolicy Bypass -File .\\scripts\\build-release-apk.ps1",
+    "build:release:aab": "powershell -ExecutionPolicy Bypass -File .\\scripts\\build-release-aab.ps1",
     "convert:taffy": "powershell -ExecutionPolicy Bypass -File .\\tools\\blender\\convert-taffy.ps1",
     "inspect:glb": "node .\\tools\\gltf\\inspect-glb.mjs .\\assets\\exports\\taffy-laugh.glb",
     "optimize:glb": "node .\\tools\\gltf\\optimize-glb.mjs"

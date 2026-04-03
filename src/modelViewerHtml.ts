@@ -184,7 +184,7 @@ export function createModelViewerHtml({
         height: 100%;
         background: transparent;
         --poster-color: transparent;
-        filter: saturate(1.1) contrast(1.04) brightness(0.996);
+        filter: saturate(1.26) contrast(1.08) brightness(1.015);
       }
     </style>
     <script>${inlineModelViewerScript}</script>
@@ -219,8 +219,11 @@ export function createModelViewerHtml({
       const MODEL_VERTICAL_OFFSET = -0.08;
       const AUTO_TARGET_RATIO = 0.74;
       const RAD_TO_DEG = 180 / Math.PI;
+      const THREE_FRONT_SIDE = 0;
+      const THREE_DOUBLE_SIDE = 2;
       const THREE_INTERPOLATE_LINEAR = 2301;
       const THREE_INTERPOLATE_SMOOTH = 2302;
+      const TOON_LITE_VERSION = 'toon-lite-v1';
 
       const app = document.getElementById('app');
       const stageRoot = document.getElementById('stageRoot');
@@ -257,12 +260,78 @@ export function createModelViewerHtml({
       let cameraStateHandle = null;
       let lastCameraState = '';
       let lastCameraStateAt = 0;
+      let viewerMounted = false;
+      let viewerMountRequested = false;
 
       function notify(type, detail) {
         if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
           window.ReactNativeWebView.postMessage(JSON.stringify({ type, detail }));
         }
       }
+
+      function getDefaultAssetMimeType(kind) {
+        return kind === 'model' ? 'model/gltf-binary' : 'audio/mpeg';
+      }
+
+      function createAssetBridgeState(kind) {
+        return {
+          kind,
+          status: 'waiting',
+          mimeType: getDefaultAssetMimeType(kind),
+          buffers: [],
+          totalChunks: 0,
+          receivedChunks: 0,
+          totalBytes: 0,
+        };
+      }
+
+      const assetBridgeState = {
+        model: modelUri ? createAssetBridgeState('model') : null,
+        audio: audioUri ? createAssetBridgeState('audio') : null,
+      };
+
+      function getAssetBridge(kind) {
+        return kind === 'audio' ? assetBridgeState.audio : assetBridgeState.model;
+      }
+
+      function setAssetBridge(kind, nextState) {
+        if (kind === 'audio') {
+          assetBridgeState.audio = nextState;
+        } else {
+          assetBridgeState.model = nextState;
+        }
+      }
+
+      function decodeBase64Chunk(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+
+        for (let index = 0; index < binary.length; index += 1) {
+          bytes[index] = binary.charCodeAt(index);
+        }
+
+        return bytes;
+      }
+
+      window.addEventListener('error', (event) => {
+        const message =
+          event && event.error && typeof event.error.message === 'string'
+            ? event.error.message
+            : event && typeof event.message === 'string'
+              ? event.message
+              : '页面脚本发生未知错误。';
+        notify('viewer-error', 'WebView 脚本错误：' + message);
+      });
+
+      window.addEventListener('unhandledrejection', (event) => {
+        const reason =
+          event && typeof event.reason === 'object' && event.reason && typeof event.reason.message === 'string'
+            ? event.reason.message
+            : event && typeof event.reason === 'string'
+              ? event.reason
+              : '未处理的 Promise 异常。';
+        notify('viewer-error', 'WebView Promise 错误：' + reason);
+      });
 
       function getViewer() {
         return document.getElementById('viewer');
@@ -373,6 +442,50 @@ export function createModelViewerHtml({
         }
       }
 
+      function resetAssetBridge(kind) {
+        releaseBlobUrl(kind);
+        setAssetBridge(kind, kind === 'audio' ? (audioUri ? createAssetBridgeState(kind) : null) : modelUri ? createAssetBridgeState(kind) : null);
+      }
+
+      function finalizeAssetBridge(kind) {
+        const state = getAssetBridge(kind);
+        if (!state || !Array.isArray(state.buffers) || !state.buffers.length) {
+          return null;
+        }
+
+        const blobUrl = URL.createObjectURL(
+          new Blob(state.buffers, {
+            type: state.mimeType || getDefaultAssetMimeType(kind),
+          })
+        );
+
+        if (kind === 'audio') {
+          releaseBlobUrl('audio');
+          audioBlobUrl = blobUrl;
+        } else {
+          releaseBlobUrl('model');
+          currentBlobUrl = blobUrl;
+        }
+
+        state.status = 'ready';
+        state.buffers = [];
+        return blobUrl;
+      }
+
+      function areTransferredAssetsReady() {
+        const modelState = assetBridgeState.model;
+        if (!modelState || modelState.status !== 'ready' || !currentBlobUrl) {
+          return false;
+        }
+
+        const audioState = assetBridgeState.audio;
+        if (!audioState) {
+          return true;
+        }
+
+        return audioState.status === 'ready' || audioState.status === 'skipped';
+      }
+
       function stopMorphLoop() {
         if (morphAnimationHandle) {
           cancelAnimationFrame(morphAnimationHandle);
@@ -393,6 +506,29 @@ export function createModelViewerHtml({
           throw new Error('fetch failed (' + response.status + ')');
         }
         return await response.blob();
+      }
+
+      function withTimeout(promise, timeoutMs, label) {
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            reject(new Error(label + ' timed out (' + String(timeoutMs) + 'ms)'));
+          }, timeoutMs);
+
+          Promise.resolve(promise).then(
+            (value) => {
+              clearTimeout(timer);
+              resolve(value);
+            },
+            (error) => {
+              clearTimeout(timer);
+              reject(error);
+            }
+          );
+        });
+      }
+
+      function looksLikeLocalAssetUri(uri) {
+        return typeof uri === 'string' && /^(file|content):/i.test(uri);
       }
 
       function fetchBlobWithXhr(uri) {
@@ -417,10 +553,16 @@ export function createModelViewerHtml({
 
       async function resolveAssetSource(uri, kind, label) {
         releaseBlobUrl(kind);
-        const friendlyMessage = kind === 'audio' ? '正在接入本地配乐。' : '正在整理本地模型。';
+        const friendlyMessage = kind === 'audio' ? '正在接入本地配乐' : '正在整理本地模型。';
+        const timeoutMs = kind === 'audio' ? 12000 : 20000;
+        const preferXhrFirst = looksLikeLocalAssetUri(uri);
+        const primaryFetch = preferXhrFirst ? fetchBlobWithXhr(uri) : fetchBlobWithFetch(uri);
+        const secondaryFetch = preferXhrFirst ? fetchBlobWithFetch(uri) : fetchBlobWithXhr(uri);
+        const primaryLabel = preferXhrFirst ? 'xhr' : 'fetch';
+        const secondaryLabel = preferXhrFirst ? 'fetch' : 'xhr';
 
         try {
-          const blob = await fetchBlobWithFetch(uri);
+          const blob = await withTimeout(primaryFetch, timeoutMs, primaryLabel);
           const blobUrl = URL.createObjectURL(blob);
           if (kind === 'audio') {
             audioBlobUrl = blobUrl;
@@ -429,9 +571,9 @@ export function createModelViewerHtml({
           }
           notify('viewer-loading', friendlyMessage);
           return blobUrl;
-        } catch (fetchError) {
+        } catch (primaryError) {
           try {
-            const blob = await fetchBlobWithXhr(uri);
+            const blob = await withTimeout(secondaryFetch, timeoutMs, secondaryLabel);
             const blobUrl = URL.createObjectURL(blob);
             if (kind === 'audio') {
               audioBlobUrl = blobUrl;
@@ -440,16 +582,16 @@ export function createModelViewerHtml({
             }
             notify('viewer-loading', friendlyMessage);
             return blobUrl;
-          } catch (xhrError) {
-            const fetchMessage =
-              fetchError && typeof fetchError.message === 'string'
-                ? fetchError.message
-                : String(fetchError);
-            const xhrMessage =
-              xhrError && typeof xhrError.message === 'string'
-                ? xhrError.message
-                : String(xhrError);
-            throw new Error('fetch=' + fetchMessage + '; xhr=' + xhrMessage);
+          } catch (secondaryError) {
+            const primaryMessage =
+              primaryError && typeof primaryError.message === 'string'
+                ? primaryError.message
+                : String(primaryError);
+            const secondaryMessage =
+              secondaryError && typeof secondaryError.message === 'string'
+                ? secondaryError.message
+                : String(secondaryError);
+            throw new Error(primaryLabel + '=' + primaryMessage + '; ' + secondaryLabel + '=' + secondaryMessage);
           }
         }
       }
@@ -610,26 +752,28 @@ export function createModelViewerHtml({
 
       function buildPlaybackStatus() {
         const viewer = getViewer();
-        const duration =
-          currentAnimationDuration > 0
-            ? currentAnimationDuration
-            : audioElement && Number.isFinite(audioElement.duration)
-              ? audioElement.duration
-              : 0;
+        const animationDuration = currentAnimationDuration > 0 ? currentAnimationDuration : 0;
+        const audioDuration =
+          audioElement && Number.isFinite(audioElement.duration) && audioElement.duration > 0
+            ? audioElement.duration
+            : 0;
+        const duration = Math.max(animationDuration, audioDuration);
         const audioCurrentTime =
           audioElement && Number.isFinite(audioElement.currentTime) ? audioElement.currentTime : 0;
         const viewerCurrentTime =
           viewer && typeof viewer.currentTime === 'number' && Number.isFinite(viewer.currentTime)
             ? viewer.currentTime
             : 0;
-        const currentTime = audioCurrentTime > 0.01 ? audioCurrentTime : viewerCurrentTime;
+        const audioPlaying = Boolean(audioElement && audioReady && !audioElement.paused && !audioElement.ended);
+        const viewerPlaying = Boolean(
+          viewer &&
+            (typeof viewer.paused === 'boolean'
+              ? !viewer.paused
+              : playbackRequested && viewerCurrentTime < Math.max(duration - 0.03, 0.03))
+        );
+        const currentTime = audioPlaying ? audioCurrentTime : Math.max(viewerCurrentTime, audioCurrentTime);
         const progress = duration > 0 ? clamp01(currentTime / duration) : 0;
-        const playing =
-          playbackRequested &&
-          Boolean(
-            (audioElement && !audioElement.paused && !audioElement.ended) ||
-              (viewer && viewerCurrentTime < Math.max(duration - 0.03, 0.03))
-          );
+        const playing = playbackRequested && (audioPlaying || viewerPlaying);
 
         return {
           playing,
@@ -637,7 +781,7 @@ export function createModelViewerHtml({
           currentTime,
           duration,
           energy: visualEnergy,
-          didFinish: !playing && duration > 0 && currentTime >= duration - 0.03,
+          didFinish: !playing && !isLooping && duration > 0 && currentTime >= duration - 0.03,
         };
       }
 
@@ -721,6 +865,57 @@ export function createModelViewerHtml({
         const isHair = HAIR_MATERIALS.has(name);
         const isFabric = FABRIC_MATERIALS.has(name);
         const isAccent = ACCENT_MATERIALS.has(name);
+        const profile = isFace
+          ? {
+              key: 'face',
+              steps: 3.2,
+              shadowFloor: 0.84,
+              shadowCeiling: 1.08,
+              specularMix: 0.08,
+              rimStrength: 0.055,
+              rimPower: 2.4,
+              pastelLift: 0.082,
+              saturationBoost: 1.12,
+              emissive: [0.032, 0.018, 0.024],
+            }
+          : isHair
+            ? {
+                key: 'hair',
+                steps: 4,
+                shadowFloor: 0.82,
+                shadowCeiling: 1.06,
+                specularMix: 0.14,
+                rimStrength: 0.072,
+                rimPower: 2.15,
+                pastelLift: 0.052,
+                saturationBoost: 1.16,
+                emissive: [0.018, 0.012, 0.02],
+              }
+            : isAccent
+              ? {
+                  key: 'accent',
+                  steps: 4.4,
+                  shadowFloor: 0.86,
+                  shadowCeiling: 1.12,
+                  specularMix: 0.22,
+                  rimStrength: 0.08,
+                  rimPower: 1.95,
+                  pastelLift: 0.026,
+                  saturationBoost: 1.14,
+                  emissive: [0.02, 0.016, 0.022],
+                }
+              : {
+                  key: isFabric ? 'fabric' : 'body',
+                  steps: isFabric ? 4 : 3.7,
+                  shadowFloor: isFabric ? 0.8 : 0.82,
+                  shadowCeiling: isFabric ? 1.04 : 1.05,
+                  specularMix: isFabric ? 0.1 : 0.07,
+                  rimStrength: isFabric ? 0.052 : 0.04,
+                  rimPower: isFabric ? 2.3 : 2.5,
+                  pastelLift: isFabric ? 0.032 : 0.044,
+                  saturationBoost: isFabric ? 1.08 : 1.1,
+                  emissive: isFabric ? [0.014, 0.012, 0.016] : [0.016, 0.012, 0.016],
+                };
 
         if (mode === 'blend') {
           material.transparent = true;
@@ -737,15 +932,23 @@ export function createModelViewerHtml({
         }
 
         if ('roughness' in material) {
-          material.roughness = isAccent ? 0.24 : isHair ? 0.5 : isFace ? 0.44 : isFabric ? 0.58 : 0.6;
+          material.roughness = isAccent ? 0.36 : isHair ? 0.52 : isFace ? 0.68 : isFabric ? 0.74 : 0.78;
         }
 
         if ('metalness' in material) {
-          material.metalness = isAccent ? 0.03 : 0;
+          material.metalness = isAccent ? 0.02 : 0;
         }
 
         if ('envMapIntensity' in material) {
-          material.envMapIntensity = isAccent ? 0.22 : isHair ? 0.1 : isFace ? 0.05 : isFabric ? 0.06 : 0.08;
+          material.envMapIntensity = isAccent ? 0.16 : isHair ? 0.08 : isFace ? 0.035 : isFabric ? 0.045 : 0.04;
+        }
+
+        if ('alphaToCoverage' in material) {
+          material.alphaToCoverage = mode === 'mask';
+        }
+
+        if ('emissive' in material && material.emissive && typeof material.emissive.setRGB === 'function') {
+          material.emissive.setRGB(profile.emissive[0], profile.emissive[1], profile.emissive[2]);
         }
 
         if (material.map && 'colorSpace' in material.map) {
@@ -758,7 +961,56 @@ export function createModelViewerHtml({
           material.emissiveMap.needsUpdate = true;
         }
 
-        material.side = 2;
+        if ('side' in material) {
+          material.side = isHair || isFabric || mode === 'blend' ? THREE_DOUBLE_SIDE : THREE_FRONT_SIDE;
+        }
+
+        if (typeof material.onBeforeCompile === 'function') {
+          material.onBeforeCompile = (shader) => {
+            shader.uniforms.uToonSteps = { value: profile.steps };
+            shader.uniforms.uToonShadowFloor = { value: profile.shadowFloor };
+            shader.uniforms.uToonShadowCeiling = { value: profile.shadowCeiling };
+            shader.uniforms.uToonSpecularMix = { value: profile.specularMix };
+            shader.uniforms.uToonRimStrength = { value: profile.rimStrength };
+            shader.uniforms.uToonRimPower = { value: profile.rimPower };
+            shader.uniforms.uToonPastelLift = { value: profile.pastelLift };
+            shader.uniforms.uToonSaturationBoost = { value: profile.saturationBoost };
+
+            shader.fragmentShader = [
+              'uniform float uToonSteps;',
+              'uniform float uToonShadowFloor;',
+              'uniform float uToonShadowCeiling;',
+              'uniform float uToonSpecularMix;',
+              'uniform float uToonRimStrength;',
+              'uniform float uToonRimPower;',
+              'uniform float uToonPastelLift;',
+              'uniform float uToonSaturationBoost;',
+              shader.fragmentShader,
+            ].join('\\n');
+
+            shader.fragmentShader = shader.fragmentShader.replace(
+              'vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;',
+              [
+                'float toonDiffuseLuma = dot(totalDiffuse, vec3(0.2126, 0.7152, 0.0722));',
+                'float toonBand = floor(clamp(toonDiffuseLuma, 0.0, 1.0) * uToonSteps + 0.55) / uToonSteps;',
+                'float toonLightMix = mix(uToonShadowFloor, uToonShadowCeiling, toonBand);',
+                'float toonRim = pow(1.0 - clamp(dot(normalize(normal), geometryViewDir), 0.0, 1.0), uToonRimPower) * uToonRimStrength;',
+                'vec3 stylizedDiffuse = totalDiffuse * toonLightMix + diffuseColor.rgb * uToonPastelLift * (0.18 + toonBand * 0.2);',
+                'vec3 stylizedSpecular = totalSpecular * uToonSpecularMix;',
+                'vec3 toonComposite = stylizedDiffuse + stylizedSpecular + totalEmissiveRadiance + vec3(toonRim);',
+                'float toonCompositeLuma = dot(toonComposite, vec3(0.2126, 0.7152, 0.0722));',
+                'vec3 outgoingLight = mix(vec3(toonCompositeLuma), toonComposite, uToonSaturationBoost);',
+              ].join('\\n')
+            );
+          };
+
+          material.customProgramCacheKey = () => [
+            TOON_LITE_VERSION,
+            profile.key,
+            mode,
+          ].join(':');
+        }
+
         material.needsUpdate = true;
       }
 
@@ -1270,10 +1522,171 @@ export function createModelViewerHtml({
         sendPlaybackStatus(true);
       }
 
+      async function mountResolvedViewer(resolvedModelUri, resolvedAudioUri) {
+        notify('viewer-loading', '正在接入本地配乐');
+        await prepareAudioTransport(resolvedAudioUri);
+
+        app.innerHTML = \`
+          <model-viewer
+            id="viewer"
+            src="\${resolvedModelUri}"
+            orientation="0deg 0deg 0deg"
+            camera-controls
+            disable-pan
+            camera-orbit="\${initialCameraOrbit}"
+            camera-target="\${initialCameraTarget || DEFAULT_CAMERA_TARGET}"
+            field-of-view="24.4deg"
+            min-camera-orbit="-360deg 44deg 1.78m"
+            max-camera-orbit="360deg 88deg 7.8m"
+            interaction-prompt="none"
+            shadow-intensity="0.74"
+            shadow-softness="1.08"
+            exposure="1.05"
+            tone-mapping="agx"
+            environment-image="neutral"
+          ></model-viewer>
+        \`;
+
+        const viewer = getViewer();
+
+        if (!viewer) {
+          notify('viewer-error', '页面中的 model-viewer 节点没有成功创建。');
+          viewerMounted = false;
+          return;
+        }
+
+        viewer.addEventListener('camera-change', () => {
+          scheduleCameraState(false);
+        });
+
+        viewer.addEventListener('load', () => {
+          const animationCount = selectPrimaryAnimation(viewer);
+          const sceneInfo = stabilizeSceneGraph(viewer);
+          currentAnimationDuration =
+            typeof viewer.duration === 'number' && Number.isFinite(viewer.duration)
+              ? viewer.duration
+              : 0;
+          applyConfig({
+            animationSpeed: initialAnimationSpeed,
+            cameraOrbit: initialCameraOrbit,
+            cameraTarget: initialCameraTarget,
+          });
+          viewer.pause();
+          viewer.currentTime = 0;
+          setExpressionWeights(baseExpressionWeights);
+          startPlaybackMonitor();
+          sendPlaybackStatus(true);
+          sendCameraState(true);
+
+          notify('viewer-ready', {
+            message: '舞台已准备好。',
+            sceneFound: sceneInfo.sceneFound,
+            morphTargetCount: sceneInfo.morphTargetCount,
+            morphTargetNames: sceneInfo.morphTargetNames,
+            animationCount,
+          });
+        });
+
+        viewer.addEventListener('error', () => {
+          viewerMounted = false;
+          notify('viewer-error', '舞台资源加载失败，请稍后重试。');
+        });
+      }
+
+      async function maybeMountTransferredViewer() {
+        if (!viewerMountRequested || viewerMounted || !areTransferredAssetsReady()) {
+          return;
+        }
+
+        viewerMounted = true;
+        try {
+          await mountResolvedViewer(currentBlobUrl, audioBlobUrl);
+        } catch (error) {
+          viewerMounted = false;
+          const message = error && typeof error.message === 'string' ? error.message : String(error);
+          notify('viewer-error', '舞台初始化异常：' + message);
+        }
+      }
+
       function handleBridgeEvent(event) {
         try {
           const payload = JSON.parse(event.data);
           if (!payload || typeof payload.type !== 'string') {
+            return;
+          }
+
+          if (payload.type === 'asset-transfer-start') {
+            const kind = payload.kind === 'audio' ? 'audio' : 'model';
+            resetAssetBridge(kind);
+            const state = getAssetBridge(kind);
+            if (!state) {
+              return;
+            }
+            state.status = 'transferring';
+            state.mimeType =
+              typeof payload.mimeType === 'string' && payload.mimeType
+                ? payload.mimeType
+                : getDefaultAssetMimeType(kind);
+            state.totalChunks =
+              typeof payload.totalChunks === 'number' && Number.isFinite(payload.totalChunks)
+                ? payload.totalChunks
+                : 0;
+            state.totalBytes =
+              typeof payload.totalBytes === 'number' && Number.isFinite(payload.totalBytes)
+                ? payload.totalBytes
+                : 0;
+            state.receivedChunks = 0;
+            state.buffers = [];
+            return;
+          }
+
+          if (payload.type === 'asset-transfer-chunk') {
+            const kind = payload.kind === 'audio' ? 'audio' : 'model';
+            const state = getAssetBridge(kind);
+            if (!state || typeof payload.data !== 'string') {
+              return;
+            }
+            state.status = 'transferring';
+            state.buffers.push(decodeBase64Chunk(payload.data));
+            state.receivedChunks += 1;
+            return;
+          }
+
+          if (payload.type === 'asset-transfer-end') {
+            const kind = payload.kind === 'audio' ? 'audio' : 'model';
+            const state = getAssetBridge(kind);
+            if (!state) {
+              return;
+            }
+            finalizeAssetBridge(kind);
+            void maybeMountTransferredViewer();
+            return;
+          }
+
+          if (payload.type === 'asset-transfer-skip') {
+            const kind = payload.kind === 'audio' ? 'audio' : 'model';
+            if (kind === 'audio') {
+              releaseBlobUrl('audio');
+              setAssetBridge('audio', {
+                kind: 'audio',
+                status: 'skipped',
+                mimeType: getDefaultAssetMimeType('audio'),
+                buffers: [],
+                totalChunks: 0,
+                receivedChunks: 0,
+                totalBytes: 0,
+              });
+              void maybeMountTransferredViewer();
+            }
+            return;
+          }
+
+          if (payload.type === 'asset-transfer-error') {
+            const message =
+              typeof payload.message === 'string' && payload.message
+                ? payload.message
+                : '离线资源传输失败，请重新打开应用后再试。';
+            notify('viewer-error', message);
             return;
           }
 
@@ -1338,85 +1751,20 @@ export function createModelViewerHtml({
           return;
         }
 
+        viewerMounted = false;
+        viewerMountRequested = true;
+        resetAssetBridge('model');
+        resetAssetBridge('audio');
         notify('viewer-loading', '正在唤醒离线舞台。');
-
-        let resolvedModelUri = modelUri;
-        try {
-          resolvedModelUri = await resolveAssetSource(modelUri, 'model', 'GLB');
-        } catch {
-          notify('viewer-error', '本地模型读取失败，请重新打开应用后再试。');
-          return;
-        }
-
-        notify('viewer-loading', '正在接入本地配乐。');
-        await prepareAudioTransport(audioUri);
-
-        app.innerHTML = \`
-          <model-viewer
-            id="viewer"
-            src="\${resolvedModelUri}"
-            orientation="0deg 0deg 0deg"
-            camera-controls
-            disable-pan
-            camera-orbit="\${initialCameraOrbit}"
-            camera-target="\${initialCameraTarget || DEFAULT_CAMERA_TARGET}"
-            field-of-view="24.4deg"
-            min-camera-orbit="-360deg 44deg 1.78m"
-            max-camera-orbit="360deg 88deg 7.8m"
-            interaction-prompt="none"
-            shadow-intensity="0.74"
-            shadow-softness="0.96"
-            exposure="0.98"
-            tone-mapping="linear"
-            environment-image="neutral"
-          ></model-viewer>
-        \`;
-
-        const viewer = getViewer();
-
-        if (!viewer) {
-          notify('viewer-error', '页面中的 model-viewer 节点没有成功创建。');
-          return;
-        }
-
-        viewer.addEventListener('camera-change', () => {
-          scheduleCameraState(false);
-        });
-
-        viewer.addEventListener('load', () => {
-          const animationCount = selectPrimaryAnimation(viewer);
-          const sceneInfo = stabilizeSceneGraph(viewer);
-          currentAnimationDuration =
-            typeof viewer.duration === 'number' && Number.isFinite(viewer.duration)
-              ? viewer.duration
-              : 0;
-          applyConfig({
-            animationSpeed: initialAnimationSpeed,
-            cameraOrbit: initialCameraOrbit,
-            cameraTarget: initialCameraTarget,
-          });
-          viewer.pause();
-          viewer.currentTime = 0;
-          setExpressionWeights(baseExpressionWeights);
-          startPlaybackMonitor();
-          sendPlaybackStatus(true);
-          sendCameraState(true);
-
-          notify('viewer-ready', {
-            message: '舞台已准备好。',
-            sceneFound: sceneInfo.sceneFound,
-            morphTargetCount: sceneInfo.morphTargetCount,
-            morphTargetNames: sceneInfo.morphTargetNames,
-            animationCount,
-          });
-        });
-
-        viewer.addEventListener('error', () => {
-          notify('viewer-error', '舞台资源加载失败，请稍后重试。');
+        notify('viewer-request-assets', {
+          needsAudio: Boolean(audioUri),
         });
       }
 
-      void mountViewer();
+      void mountViewer().catch((error) => {
+        const message = error && typeof error.message === 'string' ? error.message : String(error);
+        notify('viewer-error', '舞台初始化异常：' + message);
+      });
     </script>
   </body>
 </html>

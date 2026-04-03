@@ -102,9 +102,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.example.naiwa'
+    namespace 'io.github.ly_xxx.tangshijiadao'
     defaultConfig {
-        applicationId 'com.example.naiwa'
+        applicationId 'io.github.ly_xxx.tangshijiadao'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

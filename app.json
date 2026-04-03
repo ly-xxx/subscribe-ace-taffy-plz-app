@@ -1,20 +1,20 @@
 {
   "expo": {
     "name": "唐氏驾到",
-    "slug": "naiwa-mmd-player",
+    "slug": "tangshi-jiadao",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "icon": "./Gemini_Generated_Image_szidjvszidjvszid.png",
+    "icon": "./assets/branding/app-icon.png",
     "assetBundlePatterns": [
       "**/*"
     ],
     "android": {
-      "package": "com.example.naiwa",
+      "package": "io.github.ly_xxx.tangshijiadao",
       "adaptiveIcon": {
-        "foregroundImage": "./Gemini_Generated_Image_szidjvszidjvszid.png",
-        "backgroundColor": "#08111a"
+        "foregroundImage": "./assets/branding/app-icon.png",
+        "backgroundColor": "#f8f4f6"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false

@@ -17,7 +17,14 @@ import {
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { cacheDirectory, makeDirectoryAsync, writeAsStringAsync } from 'expo-file-system/legacy';
+import {
+  cacheDirectory,
+  EncodingType,
+  getInfoAsync,
+  makeDirectoryAsync,
+  readAsStringAsync,
+  writeAsStringAsync,
+} from 'expo-file-system/legacy';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { WebView } from 'react-native-webview';
 
@@ -150,6 +157,32 @@ type PlaybackBridgeDetail = {
   didFinish?: boolean;
 };
 
+type ViewerAssetKind = 'model' | 'audio';
+
+const VIEWER_ASSET_CHUNK_BYTES = 96 * 1024;
+
+function inferViewerAssetMimeType(uri: string, kind: ViewerAssetKind) {
+  const normalizedUri = uri.toLowerCase();
+
+  if (kind === 'model') {
+    return 'model/gltf-binary';
+  }
+
+  if (normalizedUri.endsWith('.wav')) {
+    return 'audio/wav';
+  }
+
+  if (normalizedUri.endsWith('.ogg')) {
+    return 'audio/ogg';
+  }
+
+  if (normalizedUri.endsWith('.m4a')) {
+    return 'audio/mp4';
+  }
+
+  return 'audio/mpeg';
+}
+
 const defaultCameraBridgeState = buildCameraBridgeDetailFromOrbit(
   formatCameraOrbit(
     parseCameraOrbit(cameraPresets[0].cameraOrbit).azimuthDeg + motionCatalog[0].cameraAzimuthOffsetDeg,
@@ -259,6 +292,7 @@ export default function App() {
   const waveLoopRef = useRef<Animated.CompositeAnimation | null>(null);
   const assetUriCacheRef = useRef(new Map<number, string>());
   const assetPromiseCacheRef = useRef(new Map<number, Promise<string>>());
+  const assetTransferTokenRef = useRef(0);
 
   const [selectedMotionId, setSelectedMotionId] = useState<MotionAssetId>(motionCatalog[0].id);
   const [modelUri, setModelUri] = useState<string | null>(null);
@@ -486,6 +520,114 @@ export default function App() {
     webViewRef.current?.postMessage(JSON.stringify(message));
   }
 
+  async function streamViewerAssetToBridge(kind: ViewerAssetKind, uri: string, transferToken: number) {
+    const info = await getInfoAsync(uri);
+    if (!info.exists || info.isDirectory || typeof info.size !== 'number' || info.size <= 0) {
+      throw new Error(kind === 'model' ? '本地模型文件不存在。' : '本地配乐文件不存在。');
+    }
+
+    const totalBytes = info.size;
+    const totalChunks = Math.max(1, Math.ceil(totalBytes / VIEWER_ASSET_CHUNK_BYTES));
+    const mimeType = inferViewerAssetMimeType(uri, kind);
+
+    postViewerMessage({
+      type: 'asset-transfer-start',
+      kind,
+      mimeType,
+      totalBytes,
+      totalChunks,
+    });
+
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+      if (transferToken !== assetTransferTokenRef.current) {
+        return false;
+      }
+
+      const position = chunkIndex * VIEWER_ASSET_CHUNK_BYTES;
+      const length = Math.min(VIEWER_ASSET_CHUNK_BYTES, totalBytes - position);
+      const data = await readAsStringAsync(uri, {
+        encoding: EncodingType.Base64,
+        position,
+        length,
+      });
+
+      if (transferToken !== assetTransferTokenRef.current) {
+        return false;
+      }
+
+      postViewerMessage({
+        type: 'asset-transfer-chunk',
+        kind,
+        index: chunkIndex,
+        totalChunks,
+        data,
+      });
+
+      if (chunkIndex === 0 || chunkIndex === totalChunks - 1 || chunkIndex % 4 === 0) {
+        const progress = Math.round(((chunkIndex + 1) / totalChunks) * 100);
+        setViewerDetail(kind === 'model' ? `正在整理本地模型 ${progress}%` : `正在接入本地配乐 ${progress}%`);
+      }
+
+      if (chunkIndex % 6 === 5) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
+
+    if (transferToken !== assetTransferTokenRef.current) {
+      return false;
+    }
+
+    postViewerMessage({
+      type: 'asset-transfer-end',
+      kind,
+      totalBytes,
+      totalChunks,
+    });
+
+    return true;
+  }
+
+  async function streamViewerAssets() {
+    const transferToken = assetTransferTokenRef.current + 1;
+    assetTransferTokenRef.current = transferToken;
+
+    if (!modelUri) {
+      setViewerState('error');
+      setViewerDetail('当前动作缺少本地模型资源。');
+      return;
+    }
+
+    setViewerState('loading');
+    setViewerDetail('正在整理本地模型 0%');
+
+    try {
+      const modelTransferred = await streamViewerAssetToBridge('model', modelUri, transferToken);
+      if (!modelTransferred || transferToken !== assetTransferTokenRef.current) {
+        return;
+      }
+
+      if (audioUri) {
+        setViewerDetail('正在接入本地配乐 0%');
+        const audioTransferred = await streamViewerAssetToBridge('audio', audioUri, transferToken);
+        if (!audioTransferred || transferToken !== assetTransferTokenRef.current) {
+          return;
+        }
+      } else {
+        postViewerMessage({ type: 'asset-transfer-skip', kind: 'audio' });
+      }
+    } catch (error) {
+      if (transferToken !== assetTransferTokenRef.current) {
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : '离线资源传输失败。';
+      postViewerMessage({ type: 'asset-transfer-error', message });
+      setViewerState('error');
+      setViewerDetail(message);
+      setIsPlaybackActive(false);
+    }
+  }
+
   async function resolveCachedAsset(moduleId: number | null) {
     if (!moduleId) return null;
 
@@ -663,6 +805,10 @@ export default function App() {
   const viewerWebViewKey = viewerPageUri ?? `inline-${hashString(html)}`;
 
   useEffect(() => {
+    assetTransferTokenRef.current += 1;
+  }, [audioUri, modelUri, viewerWebViewKey]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function writeViewerHtml() {
@@ -707,6 +853,11 @@ export default function App() {
       if (payload.type === 'viewer-loading') {
         setViewerState('loading');
         if (typeof payload.detail === 'string') setViewerDetail(payload.detail);
+        return;
+      }
+
+      if (payload.type === 'viewer-request-assets') {
+        void streamViewerAssets();
         return;
       }
 
@@ -787,7 +938,7 @@ export default function App() {
   const loadingSummary =
     viewerState === 'error'
       ? viewerDetail
-      : `正在为 ${selectedMotion.title} 调整灯光、动作和配乐。`;
+      : viewerDetail || `正在为 ${selectedMotion.title} 调整灯光、动作和配乐。`;
   const activeFact = loadingFacts[loadingFactIndex % loadingFacts.length];
   const cameraReadoutText = formatCameraReadout(cameraBridgeState);
   const sheetBackdropOpacity = settingsAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
@@ -803,25 +954,27 @@ export default function App() {
         <View style={styles.bgLeft} />
         <View style={styles.bgRight} />
         <View style={styles.bgBottom} />
-        <WebView
-          key={viewerWebViewKey}
-          ref={webViewRef}
-          originWhitelist={['*']}
-          onError={(event) => {
-            setViewerState('error');
-            setViewerDetail(event.nativeEvent.description || 'WebView 打开离线舞台失败。');
-          }}
-          onMessage={(event) => handleViewerMessage(event.nativeEvent.data)}
-          source={viewerPageUri ? { uri: viewerPageUri } : { html }}
-          style={styles.webview}
-          javaScriptEnabled
-          cacheEnabled={false}
-          allowsInlineMediaPlayback
-          mediaPlaybackRequiresUserAction={false}
-          allowFileAccess
-          allowFileAccessFromFileURLs
-          allowUniversalAccessFromFileURLs
-        />
+        {viewerPageUri ? (
+          <WebView
+            key={viewerWebViewKey}
+            ref={webViewRef}
+            originWhitelist={['*']}
+            onError={(event) => {
+              setViewerState('error');
+              setViewerDetail(event.nativeEvent.description || 'WebView 打开离线舞台失败。');
+            }}
+            onMessage={(event) => handleViewerMessage(event.nativeEvent.data)}
+            source={{ uri: viewerPageUri }}
+            style={styles.webview}
+            javaScriptEnabled
+            cacheEnabled={false}
+            allowsInlineMediaPlayback
+            mediaPlaybackRequiresUserAction={false}
+            allowFileAccess
+            allowFileAccessFromFileURLs
+            allowUniversalAccessFromFileURLs
+          />
+        ) : null}
         {viewerState !== 'ready' ? (
           <View pointerEvents="none" style={styles.stateOverlay}>
             <View style={styles.stateCard}>

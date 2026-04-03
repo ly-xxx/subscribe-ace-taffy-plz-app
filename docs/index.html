@@ -3,12 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>唐氏驾到 | Offline MMD Stage</title>
+    <title>唐氏驾到</title>
     <meta
       name="description"
-      content="唐氏驾到：离线 GLB 舞台、本地配乐、release APK 与 GitHub Pages，一套更轻、更亮、更像产品发布页的塔菲展示站。"
+      content="唐氏驾到。为 Android 而做的离线 MMD 舞台。模型、动作、音乐都在本地，打开，就开演。"
     />
-    <meta name="theme-color" content="#fff7fb" />
+    <meta name="theme-color" content="#fbf7f9" />
+    <link rel="icon" type="image/png" href="./assets/app-icon.png" />
+    <link rel="apple-touch-icon" href="./assets/app-icon.png" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -23,303 +25,185 @@
         <span class="brand-mark">唐</span>
         <span class="brand-copy">
           <strong>唐氏驾到</strong>
-          <small>Offline MMD Stage</small>
+          <small>Android 离线 MMD 舞台</small>
         </span>
       </a>
+
       <nav class="topnav" aria-label="主导航">
-        <a href="#showcase">Showcase</a>
-        <a href="#release">Release APK</a>
-        <a href="#deploy">Pages</a>
+        <a href="#overview">概览</a>
+        <a href="#experience">画面</a>
+        <a href="#build">构建</a>
       </nav>
-      <a class="nav-button" href="./release-build.md">Build Notes</a>
+
+      <a class="nav-button" href="./release-build.md">构建说明</a>
     </header>
 
     <main id="top">
       <section class="hero">
-        <div class="hero-copy reveal">
-          <p class="eyebrow">Offline MMD Stage for Android</p>
-          <h1>
-            把塔菲舞台
-            <span>装进手机。</span>
-          </h1>
-          <p class="hero-lede">
-            <code>唐氏驾到</code> 现在已经是一套完整链路：本地 <code>GLB</code>、内置
-            <code>model-viewer</code>、可签名的 <code>release APK</code>，再加一个能直接部署到
-            GitHub Pages 的炫酷发布页。
-          </p>
-          <div class="hero-actions">
-            <a class="button button-primary" href="#release">查看 Release 构建</a>
-            <a class="button button-secondary" href="#showcase">浏览页面设计</a>
+        <div class="hero-copy">
+          <p class="eyebrow reveal">唐氏驾到</p>
+          <h1 class="reveal reveal-delay-1">把塔菲，装进掌心。</h1>
+          <p class="hero-subtitle reveal reveal-delay-1">为 Android 而做的离线 MMD 舞台。</p>
+          <p class="hero-lede reveal reveal-delay-2">模型、动作、音乐都在本地。打开，就开演。</p>
+
+          <div class="hero-actions reveal reveal-delay-2">
+            <a class="button button-primary" href="#build">查看构建</a>
+            <a class="button button-secondary" href="#experience">浏览画面</a>
           </div>
-          <div class="hero-metrics">
-            <article class="metric-pill">
-              <strong>100%</strong>
-              <span>Offline Assets</span>
-            </article>
-            <article class="metric-pill">
-              <strong>1 Cmd</strong>
-              <span>Release Build</span>
-            </article>
-            <article class="metric-pill">
-              <strong>0 CDN</strong>
-              <span>Viewer Dependency</span>
-            </article>
+
+          <div class="hero-highlights reveal reveal-delay-3" aria-label="核心特性">
+            <span>离线 GLB</span>
+            <span>本地配乐</span>
+            <span>APK 体验包</span>
           </div>
         </div>
 
-        <div class="hero-visual reveal reveal-delay-1" data-parallax-group>
-          <div class="hero-glow hero-glow-a" data-depth="10"></div>
-          <div class="hero-glow hero-glow-b" data-depth="18"></div>
-          <div class="hero-glow hero-glow-c" data-depth="24"></div>
+        <div class="hero-stage reveal reveal-delay-2" data-parallax-group>
+          <div class="stage-aura stage-aura-a" data-depth="10"></div>
+          <div class="stage-aura stage-aura-b" data-depth="18"></div>
+          <div class="stage-aura stage-aura-c" data-depth="26"></div>
+          <div class="stage-shell"></div>
+          <div class="stage-floor"></div>
 
-          <article class="floating-note glass-panel" data-depth="28">
-            <span class="note-kicker">Built for glossy offline playback</span>
-            <strong>像一个真正的产品，而不是调试器。</strong>
-            <p>轻粉色大留白、玻璃层导航、悬浮设备陈列，还有能一键复制的发版命令。</p>
+          <article class="stage-note stage-note-left surface-card" data-depth="14">
+            <span class="section-tag">离线</span>
+            <strong>模型、动作、音乐都在本地。</strong>
           </article>
 
-          <article class="floating-spec glass-panel" data-depth="16">
-            <span class="spec-label">Local Stack</span>
-            <ul>
-              <li>Expo + React Native</li>
-              <li>WebView + vendored model-viewer</li>
-              <li>GLB + local audio + release APK</li>
-            </ul>
+          <article class="stage-note stage-note-right surface-card" data-depth="22">
+            <span class="section-tag">Android</span>
+            <strong>现在就能装机体验。</strong>
           </article>
 
-          <div class="device-cluster">
-            <article class="device device-main" data-depth="32">
-              <div class="device-shell">
-                <div class="device-notch"></div>
-                <img
-                  src="./assets/shot-hero-960.jpg"
-                  alt="唐氏驾到主舞台界面"
-                  fetchpriority="high"
-                  decoding="async"
-                />
-              </div>
-            </article>
-            <article class="device device-left" data-depth="18">
-              <div class="device-shell">
-                <img
-                  src="./assets/shot-stage-960.jpg"
-                  alt="唐氏驾到舞台截图"
-                  loading="lazy"
-                  decoding="async"
-                />
-              </div>
-            </article>
-            <article class="device device-right" data-depth="22">
-              <div class="device-shell">
-                <img
-                  src="./assets/shot-action-960.jpg"
-                  alt="唐氏驾到动作截图"
-                  loading="lazy"
-                  decoding="async"
-                />
-              </div>
-            </article>
-          </div>
+          <article class="hero-device hero-device-left">
+            <div class="device-shell">
+              <img
+                src="./assets/shot-stage-960.jpg"
+                alt="唐氏驾到舞台截图"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+          </article>
+
+          <article class="hero-device hero-device-main">
+            <div class="device-shell device-shell-main">
+              <div class="device-notch"></div>
+              <img
+                src="./assets/shot-hero-960.jpg"
+                alt="唐氏驾到主界面截图"
+                fetchpriority="high"
+                decoding="async"
+              />
+            </div>
+          </article>
+
+          <article class="hero-device hero-device-right">
+            <div class="device-shell">
+              <img
+                src="./assets/shot-action-960.jpg"
+                alt="唐氏驾到动作界面截图"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+          </article>
         </div>
       </section>
 
-      <section class="ticker" aria-label="特性速览">
-        <div class="ticker-track">
-          <span>Offline GLB</span>
-          <span>Local Music</span>
-          <span>Release APK</span>
-          <span>GitHub Pages</span>
-          <span>Glass Navigation</span>
-          <span>Hero Screens</span>
-          <span>One Command Build</span>
-          <span>Offline GLB</span>
-          <span>Local Music</span>
-          <span>Release APK</span>
-          <span>GitHub Pages</span>
-          <span>Glass Navigation</span>
-        </div>
+      <section class="intro reveal" id="overview">
+        <p class="eyebrow">概览</p>
+        <h2>少一点说明，多一点舞台。</h2>
+        <p>这页只保留三件事：它好看，它离线，它已经能装上手机。</p>
       </section>
 
-      <section class="section-head reveal" id="showcase">
-        <p class="eyebrow">Apple-Inspired Landing Page</p>
-        <h2>用大段留白、玻璃层和悬浮设备，让页面更像发布会。</h2>
-      </section>
-
-      <section class="story-grid">
-        <article class="story-panel story-panel-sticky reveal">
-          <span class="panel-tag">Hero Story</span>
-          <h3>首屏不是堆功能，而是直接把“作品感”推到前面。</h3>
-          <p>
-            这一版 landing page 会优先展示气质，再讲技术细节。设备陈列、淡粉光晕、悬浮说明卡和缓慢滚动
-            reveal 全部为了同一件事服务：让人第一眼就觉得这不是 demo。
-          </p>
-          <div class="panel-stats">
-            <div>
-              <strong>3</strong>
-              <span>Hero Screens</span>
-            </div>
-            <div>
-              <strong>2</strong>
-              <span>Copy Cards</span>
-            </div>
-            <div>
-              <strong>1</strong>
-              <span>Deploy Workflow</span>
-            </div>
+      <section class="experience" id="experience">
+        <article class="experience-primary surface-card reveal">
+          <div class="experience-copy">
+            <span class="section-tag">画面</span>
+            <h3>像作品，不像调试页。</h3>
+            <p>白底棚拍、柔和灯光、轻粉背景。让注意力一直留在舞台中央。</p>
           </div>
-        </article>
-
-        <div class="story-stack">
-          <article class="story-card reveal reveal-delay-1">
-            <span class="panel-tag">Visual Language</span>
-            <h3>轻粉、雾面玻璃、边缘高光。</h3>
-            <p>
-              配色整体控制在非常浅的粉白区间，再用少量蓝白冷光打出层次，尽量靠质感取胜，而不是靠高饱和度吵闹取胜。
-            </p>
-          </article>
-
-          <article class="story-card reveal reveal-delay-2">
-            <span class="panel-tag">Release Ready</span>
-            <h3>既能发体验包，也能切正式签名。</h3>
-            <p>
-              你可以直接打出 <code>release APK</code> 做分发测试；当 keystore 准备好以后，只要换成正式签名变量，就能继续走上架链路。
-            </p>
-          </article>
-
-          <article class="story-card story-card-image reveal">
-            <div class="story-card-head">
-              <span class="panel-tag">Gallery</span>
-              <strong>Stage Portrait</strong>
-            </div>
+          <div class="display-frame display-frame-large">
             <img
               src="./assets/shot-stage-960.jpg"
-              alt="舞台白棚拍截图"
+              alt="唐氏驾到舞台画面"
               loading="lazy"
               decoding="async"
             />
+          </div>
+        </article>
+
+        <div class="experience-stack">
+          <article class="experience-text surface-card reveal reveal-delay-1">
+            <span class="section-tag">离线</span>
+            <h3>断网打开，也能完整播放。</h3>
+            <p>GLB、本地音乐和内置脚本都跟着应用走。</p>
+          </article>
+
+          <article class="experience-text surface-card reveal reveal-delay-2">
+            <span class="section-tag">节奏</span>
+            <h3>切换动作，镜头也会跟上。</h3>
+            <p>少一些设置感，多一些观看感。</p>
           </article>
         </div>
-      </section>
 
-      <section class="gallery">
-        <article class="gallery-card reveal">
-          <div class="gallery-copy">
-            <span class="panel-tag">Offline Runtime</span>
-            <h3>GLB、本地音频、内置脚本，全部跟着 APK 走。</h3>
-            <p>没有外链 viewer，没有运行时 CDN 依赖。断网打开，舞台也还是完整的。</p>
+        <article class="experience-secondary surface-card reveal">
+          <div class="display-frame">
+            <img
+              src="./assets/shot-action-960.jpg"
+              alt="唐氏驾到动作画面"
+              loading="lazy"
+              decoding="async"
+            />
           </div>
-          <img
-            src="./assets/shot-hero-960.jpg"
-            alt="主舞台截图"
-            loading="lazy"
-            decoding="async"
-          />
-        </article>
-
-        <article class="gallery-card reveal reveal-delay-1">
-          <div class="gallery-copy">
-            <span class="panel-tag">Launch Feel</span>
-            <h3>页面像品牌站，不像仓库说明。</h3>
-            <p>保留命令、链接和构建信息，但把它们都包进更轻盈的卡片和滚动结构里。</p>
+          <div class="experience-copy experience-copy-compact">
+            <span class="section-tag">细节</span>
+            <h3>近一点看，也要稳。</h3>
+            <p>质感、层次和边缘高光都更克制，也更像成品。</p>
           </div>
-          <img
-            src="./assets/shot-action-960.jpg"
-            alt="动作截图"
-            loading="lazy"
-            decoding="async"
-          />
         </article>
       </section>
 
-      <section class="release" id="release">
+      <section class="build" id="build">
         <div class="section-head reveal">
-          <p class="eyebrow">Release APK</p>
-          <h2>现在就能打出 release 包，没证书也能先做体验分发。</h2>
+          <p class="eyebrow">构建</p>
+          <h2>一条命令。一个 APK。</h2>
+          <p>如果只是体验分发，现在已经够用。需要正式上架，再切签名。</p>
         </div>
 
-        <div class="release-grid">
-          <article class="command-card reveal">
+        <div class="build-grid">
+          <article class="build-card build-card-command surface-card reveal">
             <header class="card-head">
-              <span class="panel-tag">Quick Start</span>
+              <span class="section-tag">Release</span>
               <button class="copy-button" data-copy-target="release-command">复制命令</button>
             </header>
             <pre id="release-command"><code>powershell -ExecutionPolicy Bypass -File .\scripts\build-release-apk.ps1</code></pre>
-            <p class="card-note">
-              默认支持 debug keystore fallback，适合真机体验包；准备好正式证书后可以无缝切换。
-            </p>
           </article>
 
-          <article class="info-card reveal reveal-delay-1">
-            <span class="panel-tag">Output</span>
-            <h3>构建产物位置</h3>
+          <article class="build-card surface-card reveal reveal-delay-1">
+            <span class="section-tag">Output</span>
+            <h3>产物位置</h3>
             <pre><code>android/app/build/outputs/apk/release/app-release.apk</code></pre>
-            <p>仓库里已经实测打出过一份可安装的 <code>app-release.apk</code>。</p>
           </article>
 
-          <article class="info-card reveal reveal-delay-2">
-            <header class="card-head">
-              <span class="panel-tag">Signing</span>
-              <button class="copy-button" data-copy-target="signing-template">复制变量</button>
-            </header>
-            <pre id="signing-template"><code>$env:NAIWA_UPLOAD_STORE_FILE = "C:\path\to\upload-keystore.jks"
-$env:NAIWA_UPLOAD_STORE_PASSWORD = "your-store-password"
-$env:NAIWA_UPLOAD_KEY_ALIAS = "your-key-alias"
-$env:NAIWA_UPLOAD_KEY_PASSWORD = "your-key-password"</code></pre>
-            <a class="text-link" href="./release-build.md">查看完整 release 构建说明</a>
-          </article>
-        </div>
-      </section>
-
-      <section class="deploy" id="deploy">
-        <div class="section-head reveal">
-          <p class="eyebrow">GitHub Pages</p>
-          <h2><code>docs/</code> 站点和 Pages 工作流都已经准备好，推上 GitHub 就能发。</h2>
-        </div>
-
-        <div class="deploy-grid">
-          <article class="deploy-card reveal">
-            <span class="panel-tag">What is included</span>
-            <h3>仓库内已包含</h3>
-            <ul class="clean-list">
-              <li><code>docs/index.html</code> 静态 landing page</li>
-              <li><code>docs/styles.css</code> 视觉与响应式布局</li>
-              <li><code>docs/script.js</code> reveal、复制与视差动效</li>
-              <li><code>docs/.nojekyll</code> 与 GitHub Pages workflow</li>
-            </ul>
-          </article>
-
-          <article class="deploy-card reveal reveal-delay-1">
-            <span class="panel-tag">Deploy Flow</span>
-            <h3>发布步骤</h3>
-            <ol class="clean-list ordered-list">
-              <li>把仓库推到 GitHub。</li>
-              <li>在仓库里启用 GitHub Pages / Actions。</li>
-              <li>工作流会自动把 <code>docs/</code> 发布成站点。</li>
-            </ol>
-            <p class="card-note">默认工作流监听 <code>master</code> 分支推送，也支持手动触发。</p>
-          </article>
-
-          <article class="deploy-card deploy-card-wide reveal reveal-delay-2">
-            <span class="panel-tag">Expected URL</span>
-            <h3>站点地址形态</h3>
-            <pre><code>https://&lt;github-username&gt;.github.io/&lt;repo-name&gt;/</code></pre>
-            <p class="card-note">
-              如果你之后告诉我仓库名，我还可以继续把页面里的下载链接和分享文案都替你补成正式版本。
-            </p>
+          <article class="build-card surface-card reveal reveal-delay-2">
+            <span class="section-tag">GitHub</span>
+            <h3>推上 GitHub，站点和体验包会一起更新。</h3>
+            <p>Pages 更新这个页面，Actions 继续产出新的 APK。</p>
+            <a class="text-link" href="./release-build.md">查看完整构建说明</a>
           </article>
         </div>
       </section>
 
       <section class="cta reveal">
-        <div class="cta-card">
-          <p class="eyebrow">Polished and Deployable</p>
-          <h2>一边是可安装的 Android 舞台，一边是可公开访问的产品页。</h2>
-          <p>
-            你现在已经有了一个可以继续迭代的 Android 作品底座，也有了一套更像品牌发布页的对外展示方式。
-          </p>
+        <div class="cta-card surface-card">
+          <p class="eyebrow">现在开始</p>
+          <h2>现在，它已经可以被看到。</h2>
+          <p>一个能装在手机里的舞台。一个能公开访问的产品页。</p>
           <div class="hero-actions">
             <a class="button button-primary" href="#top">回到顶部</a>
-            <a class="button button-secondary" href="./release-build.md">打开构建说明</a>
+            <a class="button button-secondary" href="./release-build.md">打开说明</a>
           </div>
         </div>
       </section>
@@ -327,7 +211,7 @@ $env:NAIWA_UPLOAD_KEY_PASSWORD = "your-key-password"</code></pre>
 
     <footer class="footer">
       <p>唐氏驾到</p>
-      <span>Offline MMD Stage · Expo Prototype · GitHub Pages Landing Page</span>
+      <span>Android 离线 MMD 舞台</span>
     </footer>
 
     <script src="./script.js"></script>

@@ -1,4 +1,4 @@
-package com.example.naiwa
+package io.github.ly_xxx.tangshijiadao
 
 import android.app.Application
 import android.content.res.Configuration
