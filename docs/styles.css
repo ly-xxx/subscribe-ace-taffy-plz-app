@@ -315,6 +315,7 @@ a {
 
 .hero-stage img {
   width: 100%;
+  height: auto;
   border-radius: 30px;
   box-shadow: 0 28px 90px rgba(117, 82, 97, 0.08);
 }
@@ -383,6 +384,7 @@ a {
 .gallery-card img,
 .share-card img {
   width: 100%;
+  height: auto;
   border-radius: 28px;
   box-shadow: 0 22px 52px rgba(112, 80, 94, 0.08);
 }
@@ -415,7 +417,7 @@ a {
 
 .download-grid {
   display: grid;
-  grid-template-columns: 1.04fr 0.96fr;
+  grid-template-columns: 1fr;
   gap: 22px;
   align-items: stretch;
 }
@@ -426,6 +428,9 @@ a {
 }
 
 .release-card {
+  width: 100%;
+  max-width: 760px;
+  justify-self: center;
   background:
     radial-gradient(circle at 16% 18%, rgba(255, 229, 240, 0.52), transparent 30%),
     radial-gradient(circle at 84% 14%, rgba(229, 237, 255, 0.58), transparent 30%),
@@ -467,10 +472,7 @@ a {
 
 .share-card {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  min-height: 560px;
+  display: block;
   padding: 0;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 250, 252, 0.86) 88%),
@@ -478,13 +480,15 @@ a {
 }
 
 .share-card img {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  z-index: 0;
+  display: block;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transform: scale(1.02);
+  height: auto;
+  object-fit: contain;
+  transform: none;
   box-shadow: none;
+  border-radius: 0;
 }
 
 .share-card-glow {
@@ -498,9 +502,10 @@ a {
 .share-card figcaption {
   position: relative;
   z-index: 1;
-  margin-top: auto;
-  padding: 28px 28px 30px;
+  margin-top: -116px;
+  padding: 0 28px 30px;
   gap: 6px;
+  pointer-events: none;
 }
 
 .site-footer {
@@ -581,7 +586,6 @@ a {
 
   .share-card {
     padding: 0;
-    min-height: 480px;
   }
 
   .site-footer {
@@ -649,12 +653,15 @@ a {
 
   .share-card {
     padding: 0;
-    min-height: 400px;
   }
 
   .gallery-card figcaption,
   .share-card figcaption {
     padding: 22px 18px 20px;
+  }
+
+  .share-card figcaption {
+    margin-top: -86px;
   }
 
   .release-panel {
