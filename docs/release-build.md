@@ -8,8 +8,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-release-apk.ps1
 
 默认行为：
 
+- 默认只打 `arm64-v8a`，更贴合真机分发，也能明显减少 APK 体积。
 - 如果没有配置正式签名，`release` 会临时回退到 debug keystore。
 - 这种 APK 可以用于真机测试、分发体验包，但**不适合上架 Google Play**。
+- 构建脚本会同时把 `reactNativeArchitectures` 也锁到同一 ABI，避免 React Native 依赖把其他架构重新打回 APK。
+- 脚本默认不额外执行 `clean`，这样能避开 React Native codegen 在本地重复构建时偶发的清理报错。
 
 输出位置：
 
@@ -34,6 +37,12 @@ $env:NAIWA_UPLOAD_KEY_PASSWORD = "your-key-password"
 powershell -ExecutionPolicy Bypass -File .\scripts\build-release-apk.ps1
 ```
 
+如果你要临时覆盖 ABI，也可以这样：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build-release-apk.ps1 -AbiFilters "arm64-v8a"
+```
+
 也可以直接把参数传给脚本：
 
 ```powershell
@@ -47,5 +56,6 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-release-apk.ps1 `
 ## 当前仓库的实际状态
 
 - `android/app/build.gradle` 已支持读取 `NAIWA_UPLOAD_*` 变量作为 release 签名配置。
+- `android/app/build.gradle` 已支持读取 `NAIWA_ABI_FILTERS`，当前默认值是 `arm64-v8a`。
 - 如果没有这些变量，Gradle 会明确提示正在回退到 debug keystore。
 - 这让你可以先无门槛打 `release APK` 做体验，再在准备好正式证书后切换成可发布版本。

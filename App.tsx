@@ -3,7 +3,9 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Image,
   LayoutAnimation,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -19,7 +21,7 @@ import { cacheDirectory, makeDirectoryAsync, writeAsStringAsync } from 'expo-fil
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { WebView } from 'react-native-webview';
 
-import { motionCatalog, resolveAssetUri, type MotionAssetId } from './src/assets';
+import { motionCatalog, resolveAssetUri, type MotionAssetEntry, type MotionAssetId } from './src/assets';
 import { createModelViewerHtml } from './src/modelViewerHtml';
 import { cameraPresets, type CameraPresetId } from './src/showConfig';
 
@@ -46,11 +48,86 @@ function formatCameraOrbit(azimuthDeg: number, polarDeg: number, radiusM: number
   return `${Math.round(azimuthDeg * 100) / 100}deg ${Math.round(polarDeg * 100) / 100}deg ${Math.round(radiusM * 100) / 100}m`;
 }
 
+type CameraBridgeDetail = {
+  azimuthDeg?: number;
+  polarDeg?: number;
+  radiusM?: number;
+};
+
+function buildCameraBridgeDetailFromOrbit(cameraOrbit: string): CameraBridgeDetail {
+  const orbit = parseCameraOrbit(cameraOrbit);
+  return {
+    azimuthDeg: orbit.azimuthDeg,
+    polarDeg: orbit.polarDeg,
+    radiusM: orbit.radiusM,
+  };
+}
+
+function formatCompactValue(value: number, digits: number) {
+  return (Math.round(value * 10 ** digits) / 10 ** digits).toString();
+}
+
+function formatCameraReadout(detail: CameraBridgeDetail) {
+  const azimuth = typeof detail.azimuthDeg === 'number' && Number.isFinite(detail.azimuthDeg)
+    ? `${formatCompactValue(detail.azimuthDeg, 1)}°`
+    : '--';
+  const polar = typeof detail.polarDeg === 'number' && Number.isFinite(detail.polarDeg)
+    ? `${formatCompactValue(detail.polarDeg, 1)}°`
+    : '--';
+  const radius = typeof detail.radiusM === 'number' && Number.isFinite(detail.radiusM)
+    ? `${formatCompactValue(detail.radiusM, 2)}m`
+    : '--';
+
+  return `${azimuth} · ${polar} · ${radius}`;
+}
+
+function buildCameraOrbitFromBridgeDetail(detail: CameraBridgeDetail, fallbackOrbit: string) {
+  if (
+    typeof detail.azimuthDeg !== 'number' ||
+    !Number.isFinite(detail.azimuthDeg) ||
+    typeof detail.polarDeg !== 'number' ||
+    !Number.isFinite(detail.polarDeg) ||
+    typeof detail.radiusM !== 'number' ||
+    !Number.isFinite(detail.radiusM)
+  ) {
+    return fallbackOrbit;
+  }
+
+  return formatCameraOrbit(detail.azimuthDeg, detail.polarDeg, detail.radiusM);
+}
+
 const loadingFacts = [
   '你知道吗：永雏塔菲是千早爱音唐笑的音源，唐哭的音源则来自千早爱音声优本人直播',
   '小菲的生日是2022-05-26，那一天小菲第一次出现在塔菲直播间',
   '小菲有很多变种，包括侦探菲、水手服小菲、偶像服小菲等等',
   '在有很多个小菲一起动的直播里面，通常是塔菲字幕组的成员在远程通过vrchat游戏控制其他的小菲',
+] as const;
+
+const taffySocialAvatar = require('./assets/social/taffy-avatar.jpg');
+
+const socialChannelLinks = [
+  {
+    id: 'bilibili',
+    label: '哔哩哔哩',
+    hint: '每日直播，周五或周六晚播小菲',
+    url: 'https://space.bilibili.com/1265680561',
+    iconModule: require('./assets/social/bilibili.png'),
+    tint: '#5f9fff',
+    badgeFill: 'rgba(237,246,255,0.98)',
+    tileFill: 'rgba(249,253,255,0.96)',
+    borderColor: 'rgba(173,207,243,0.4)',
+  },
+  {
+    id: 'douyin',
+    label: '抖音',
+    hint: '每天发唐氏小视频，欢迎关注',
+    url: 'https://v.douyin.com/hn24zeCIXLc/',
+    iconModule: require('./assets/social/douyin.png'),
+    tint: '#fd6d8c',
+    badgeFill: 'rgba(255,241,246,0.98)',
+    tileFill: 'rgba(255,250,252,0.96)',
+    borderColor: 'rgba(243,196,209,0.42)',
+  },
 ] as const;
 
 function pickRandomFactIndex(excludeIndex?: number) {
@@ -72,6 +149,14 @@ type PlaybackBridgeDetail = {
   energy?: number;
   didFinish?: boolean;
 };
+
+const defaultCameraBridgeState = buildCameraBridgeDetailFromOrbit(
+  formatCameraOrbit(
+    parseCameraOrbit(cameraPresets[0].cameraOrbit).azimuthDeg + motionCatalog[0].cameraAzimuthOffsetDeg,
+    parseCameraOrbit(cameraPresets[0].cameraOrbit).polarDeg,
+    parseCameraOrbit(cameraPresets[0].cameraOrbit).radiusM
+  )
+);
 
 function PlayIcon({ playing }: { playing: boolean }) {
   return playing ? (
@@ -193,8 +278,9 @@ export default function App() {
   const [playbackDuration, setPlaybackDuration] = useState(0);
   const [didFinish, setDidFinish] = useState(false);
   const [loadingFactIndex, setLoadingFactIndex] = useState(() => pickRandomFactIndex());
+  const [cameraBridgeState, setCameraBridgeState] = useState<CameraBridgeDetail>(defaultCameraBridgeState);
 
-  const selectedMotion = useMemo(
+  const selectedMotion = useMemo<MotionAssetEntry>(
     () => motionCatalog.find((motion) => motion.id === selectedMotionId) ?? motionCatalog[0],
     [selectedMotionId]
   );
@@ -203,13 +289,33 @@ export default function App() {
     [cameraPresetId]
   );
   const effectiveCameraOrbit = useMemo(() => {
+    const overrideOrbit = selectedMotion.cameraOrbitByPreset?.[cameraPresetId];
+    if (overrideOrbit) {
+      return overrideOrbit;
+    }
+
     const baseOrbit = parseCameraOrbit(selectedCamera.cameraOrbit);
     return formatCameraOrbit(
       baseOrbit.azimuthDeg + selectedMotion.cameraAzimuthOffsetDeg,
       baseOrbit.polarDeg,
       baseOrbit.radiusM
     );
-  }, [selectedCamera.cameraOrbit, selectedMotion.cameraAzimuthOffsetDeg]);
+  }, [cameraPresetId, selectedCamera.cameraOrbit, selectedMotion.cameraAzimuthOffsetDeg, selectedMotion.cameraOrbitByPreset]);
+
+  useEffect(() => {
+    const nextCameraState = buildCameraBridgeDetailFromOrbit(effectiveCameraOrbit);
+    setCameraBridgeState((current) => {
+      if (
+        current.azimuthDeg === nextCameraState.azimuthDeg &&
+        current.polarDeg === nextCameraState.polarDeg &&
+        current.radiusM === nextCameraState.radiusM
+      ) {
+        return current;
+      }
+
+      return nextCameraState;
+    });
+  }, [effectiveCameraOrbit]);
 
   useEffect(() => {
     if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -425,14 +531,24 @@ export default function App() {
     setSettingsOpen(false);
   }
 
-  function buildViewerPayload() {
+  function openExternalChannel(url: string) {
+    void Linking.openURL(url).catch(() => {});
+  }
+
+  function buildViewerPayload(options?: { preserveCurrentCamera?: boolean }) {
+    const cameraOrbit =
+      options?.preserveCurrentCamera
+        ? buildCameraOrbitFromBridgeDetail(cameraBridgeState, effectiveCameraOrbit)
+        : effectiveCameraOrbit;
+
     return {
       animationSpeed: 1,
-      cameraOrbit: effectiveCameraOrbit,
+      cameraOrbit,
       cameraTarget: selectedMotion.cameraTargetM ?? null,
       cameraTargetOffsetX: selectedMotion.cameraTargetOffsetXM ?? 0,
       isLooping,
       expressionPreset: selectedMotion.expressionPreset ?? 'default',
+      animationInterpolation: selectedMotion.animationInterpolation ?? 'linear',
     };
   }
 
@@ -492,7 +608,7 @@ export default function App() {
 
     setQueuedStart(false);
     setDidFinish(false);
-    postViewerMessage({ type: 'playFromStart', ...buildViewerPayload() });
+    postViewerMessage({ type: 'playFromStart', ...buildViewerPayload({ preserveCurrentCamera: true }) });
     setIsPlaybackActive(true);
   }
 
@@ -518,7 +634,7 @@ export default function App() {
       return;
     }
 
-    postViewerMessage({ type: 'resume', ...buildViewerPayload() });
+    postViewerMessage({ type: 'resume', ...buildViewerPayload({ preserveCurrentCamera: true }) });
     setIsPlaybackActive(true);
   }
 
@@ -526,7 +642,7 @@ export default function App() {
     if (viewerState === 'ready') {
       postViewerMessage({ type: 'configure', ...buildViewerPayload() });
     }
-  }, [effectiveCameraOrbit, isLooping, selectedMotion.expressionPreset, viewerState]);
+  }, [effectiveCameraOrbit, isLooping, selectedMotion.animationInterpolation, selectedMotion.expressionPreset, viewerState]);
 
   useEffect(() => {
     if (viewerState === 'ready' && queuedStart) void runShowFromStart();
@@ -585,7 +701,7 @@ export default function App() {
     try {
       const payload = JSON.parse(rawMessage) as {
         type?: string;
-        detail?: string | { message?: string } | PlaybackBridgeDetail;
+        detail?: string | { message?: string } | PlaybackBridgeDetail | CameraBridgeDetail;
       };
 
       if (payload.type === 'viewer-loading') {
@@ -629,6 +745,25 @@ export default function App() {
           setPlaybackEnergy(clamp01(detail.energy));
         }
         if (typeof detail.didFinish === 'boolean') setDidFinish(detail.didFinish);
+        return;
+      }
+
+      if (payload.type === 'camera-state' && payload.detail && typeof payload.detail === 'object') {
+        const detail = payload.detail as CameraBridgeDetail;
+        setCameraBridgeState((current) => ({
+          azimuthDeg:
+            typeof detail.azimuthDeg === 'number' && Number.isFinite(detail.azimuthDeg)
+              ? detail.azimuthDeg
+              : current.azimuthDeg,
+          polarDeg:
+            typeof detail.polarDeg === 'number' && Number.isFinite(detail.polarDeg)
+              ? detail.polarDeg
+              : current.polarDeg,
+          radiusM:
+            typeof detail.radiusM === 'number' && Number.isFinite(detail.radiusM)
+              ? detail.radiusM
+              : current.radiusM,
+        }));
       }
     } catch {
       // Ignore malformed bridge messages.
@@ -654,6 +789,7 @@ export default function App() {
       ? viewerDetail
       : `正在为 ${selectedMotion.title} 调整灯光、动作和配乐。`;
   const activeFact = loadingFacts[loadingFactIndex % loadingFacts.length];
+  const cameraReadoutText = formatCameraReadout(cameraBridgeState);
   const sheetBackdropOpacity = settingsAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
   const sheetTranslateY = settingsAnim.interpolate({ inputRange: [0, 1], outputRange: [28, 0] });
   const sheetScale = settingsAnim.interpolate({ inputRange: [0, 1], outputRange: [0.985, 1] });
@@ -768,7 +904,7 @@ export default function App() {
           >
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHead}>
-              <Text style={styles.sheetTitle}>舞台设置</Text>
+              <Text style={styles.sheetTitle}>配置</Text>
               <Pressable onPress={closeSettings} style={styles.sheetClose}>
                 <Text style={styles.sheetCloseText}>×</Text>
               </Pressable>
@@ -829,7 +965,14 @@ export default function App() {
                   );
                 })}
               </View>
-              <Text style={styles.label}>镜头</Text>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionHeaderLabel}>镜头</Text>
+                <View style={styles.cameraReadoutPill}>
+                  <Text numberOfLines={1} style={styles.cameraReadoutText}>
+                    {cameraReadoutText}
+                  </Text>
+                </View>
+              </View>
               <View style={styles.chips}>
                 {cameraPresets.map((preset) => (
                   <Pressable
@@ -862,6 +1005,66 @@ export default function App() {
                     ]}
                   />
                 </Pressable>
+              </View>
+              <Text style={styles.label}>关注塔菲</Text>
+              <View style={styles.followCard}>
+                <View style={styles.followCardGlow} />
+                <View style={styles.followCardOrbPrimary} />
+                <View style={styles.followCardOrbSecondary} />
+                <View style={styles.followHeader}>
+                  <View style={styles.followAvatarShell}>
+                    <View style={styles.followAvatarHalo} />
+                    <View style={styles.followAvatarFrame}>
+                      <Image source={taffySocialAvatar} style={styles.followAvatar} />
+                    </View>
+                  </View>
+                  <View style={styles.followCopy}>
+                    <View style={styles.followBadge}>
+                      <Text style={styles.followBadgeText}>官方主页</Text>
+                    </View>
+                    <Text style={styles.followTitle}>关注塔菲</Text>
+                    <Text style={styles.followSubtitle}>官方账号入口</Text>
+                  </View>
+                </View>
+                <View style={styles.followChannelGrid}>
+                  {socialChannelLinks.map((channel) => (
+                    <Pressable
+                      key={channel.id}
+                      onPress={() => openExternalChannel(channel.url)}
+                      style={({ pressed }) => [
+                        styles.followChannelTile,
+                        {
+                          backgroundColor: channel.tileFill,
+                          borderColor: channel.borderColor,
+                        },
+                        pressed ? styles.followChannelTilePressed : null,
+                      ]}
+                      >
+                      <View
+                        style={[
+                          styles.followChannelBadge,
+                          {
+                            backgroundColor: channel.badgeFill,
+                            borderColor: channel.borderColor,
+                          },
+                        ]}
+                      >
+                        <Image source={channel.iconModule} style={styles.followChannelIcon} resizeMode="contain" />
+                      </View>
+                      <View style={styles.followChannelCopy}>
+                        <Text numberOfLines={1} style={styles.followChannelLabel}>
+                          {channel.label}
+                        </Text>
+                        <Text numberOfLines={2} style={styles.followChannelHint}>
+                          {channel.hint}
+                        </Text>
+                      </View>
+                      <View style={styles.followChannelArrowWrap}>
+                        <Text style={[styles.followChannelArrow, { color: channel.tint }]}>↗</Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
               <Text style={styles.label}>配布信息</Text>
               <View style={styles.creditCard}>
@@ -1217,6 +1420,30 @@ const styles = StyleSheet.create({
   sheetCloseText: { color: '#4d303c', fontSize: 22, lineHeight: 22 },
   sheetScroll: { paddingBottom: 18, gap: 14 },
   label: { color: '#3c252e', fontSize: 12, fontWeight: '800', letterSpacing: 1, marginTop: 4 },
+  sectionHeaderRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  sectionHeaderLabel: { color: '#3c252e', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  cameraReadoutPill: {
+    flexShrink: 1,
+    minHeight: 30,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.84)',
+    borderWidth: 1,
+    borderColor: 'rgba(222,198,208,0.34)',
+  },
+  cameraReadoutText: {
+    color: '#6f5964',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
   stack: { gap: 12 },
   motionCardPressable: { borderRadius: 28 },
   motionCardPressablePressed: { opacity: 0.96, transform: [{ scale: 0.992 }] },
@@ -1368,6 +1595,143 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
+  },
+  followCard: {
+    overflow: 'hidden',
+    gap: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.86)',
+    borderWidth: 1,
+    borderColor: 'rgba(222,198,208,0.34)',
+    shadowColor: '#edd7e0',
+    shadowOpacity: 0.14,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+  },
+  followCardGlow: {
+    position: 'absolute',
+    top: -48,
+    left: -26,
+    width: 198,
+    height: 138,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,231,239,0.9)',
+    opacity: 0.9,
+  },
+  followCardOrbPrimary: {
+    position: 'absolute',
+    right: -18,
+    top: 12,
+    width: 136,
+    height: 136,
+    borderRadius: 136,
+    backgroundColor: 'rgba(248,244,255,0.72)',
+  },
+  followCardOrbSecondary: {
+    position: 'absolute',
+    right: 42,
+    bottom: -48,
+    width: 118,
+    height: 118,
+    borderRadius: 118,
+    backgroundColor: 'rgba(255,239,245,0.82)',
+  },
+  followHeader: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  followAvatarShell: { width: 82, height: 82, alignItems: 'center', justifyContent: 'center' },
+  followAvatarHalo: {
+    position: 'absolute',
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    backgroundColor: 'rgba(255,223,233,0.7)',
+    transform: [{ scale: 1.08 }],
+  },
+  followAvatarFrame: {
+    width: 74,
+    height: 74,
+    padding: 4,
+    borderRadius: 37,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(233,210,219,0.5)',
+    shadowColor: '#efdae2',
+    shadowOpacity: 0.26,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
+  followAvatar: { width: '100%', height: '100%', borderRadius: 33 },
+  followCopy: { flex: 1, gap: 5 },
+  followBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.84)',
+    borderWidth: 1,
+    borderColor: 'rgba(224,203,212,0.44)',
+  },
+  followBadgeText: { color: '#715863', fontSize: 11, fontWeight: '800', letterSpacing: 0.4 },
+  followTitle: { color: '#2f1d24', fontSize: 22, fontWeight: '900', letterSpacing: 0.2 },
+  followSubtitle: { color: '#8a7380', fontSize: 13, fontWeight: '600', lineHeight: 18 },
+  followChannelGrid: { flexDirection: 'row', gap: 10 },
+  followChannelTile: {
+    flex: 1,
+    minHeight: 126,
+    paddingHorizontal: 15,
+    paddingVertical: 15,
+    borderRadius: 22,
+    borderWidth: 1,
+    justifyContent: 'space-between',
+  },
+  followChannelTilePressed: { opacity: 0.96, transform: [{ scale: 0.992 }] },
+  followChannelBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  followChannelIcon: { width: 24, height: 24 },
+  followChannelLabel: {
+    color: '#322127',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+    lineHeight: 18,
+  },
+  followChannelCopy: {
+    gap: 4,
+    minHeight: 48,
+    paddingTop: 2,
+    paddingRight: 4,
+  },
+  followChannelHint: {
+    color: '#907985',
+    fontSize: 10.5,
+    lineHeight: 15,
+    fontWeight: '600',
+    letterSpacing: 0.1,
+  },
+  followChannelArrowWrap: {
+    alignSelf: 'flex-end',
+    minWidth: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(225,204,213,0.32)',
+  },
+  followChannelArrow: {
+    fontSize: 16,
+    fontWeight: '900',
+    lineHeight: 18,
   },
   creditCard: {
     gap: 14,

@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "ios": "expo run:ios",
     "convert:taffy": "powershell -ExecutionPolicy Bypass -File .\\tools\\blender\\convert-taffy.ps1",
-    "inspect:glb": "node .\\tools\\gltf\\inspect-glb.mjs .\\assets\\exports\\taffy-laugh.glb"
+    "inspect:glb": "node .\\tools\\gltf\\inspect-glb.mjs .\\assets\\exports\\taffy-laugh.glb",
+    "optimize:glb": "node .\\tools\\gltf\\optimize-glb.mjs"
   },
   "dependencies": {
     "expo": "~54.0.33",
@@ -24,7 +25,10 @@
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.3.0",
+    "@gltf-transform/extensions": "^4.3.0",
+    "@gltf-transform/functions": "^4.3.0",
     "@types/react": "~19.1.0",
+    "sharp": "^0.34.5",
     "typescript": "~5.9.2"
   }
 }

@@ -52,9 +52,10 @@ jobs:
         working-directory: android
         env:
           NODE_ENV: production
+          NAIWA_ABI_FILTERS: arm64-v8a
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease -PreactNativeArchitectures=${NAIWA_ABI_FILTERS}
 
       - name: Upload release APK
         uses: actions/upload-artifact@v4

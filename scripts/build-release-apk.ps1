@@ -2,7 +2,8 @@ param(
     [string]$StoreFile = $env:NAIWA_UPLOAD_STORE_FILE,
     [string]$StorePassword = $env:NAIWA_UPLOAD_STORE_PASSWORD,
     [string]$KeyAlias = $env:NAIWA_UPLOAD_KEY_ALIAS,
-    [string]$KeyPassword = $env:NAIWA_UPLOAD_KEY_PASSWORD
+    [string]$KeyPassword = $env:NAIWA_UPLOAD_KEY_PASSWORD,
+    [string]$AbiFilters = "arm64-v8a"
 )
 
 Set-StrictMode -Version Latest
@@ -45,6 +46,14 @@ if ($KeyPassword) {
     $env:NAIWA_UPLOAD_KEY_PASSWORD = $KeyPassword
 }
 
+if (-not $PSBoundParameters.ContainsKey('AbiFilters') -and $env:NAIWA_ABI_FILTERS) {
+    $AbiFilters = $env:NAIWA_ABI_FILTERS
+}
+
+if ($AbiFilters) {
+    $env:NAIWA_ABI_FILTERS = $AbiFilters
+}
+
 $hasCustomSigning = @(
     $env:NAIWA_UPLOAD_STORE_FILE,
     $env:NAIWA_UPLOAD_STORE_PASSWORD,
@@ -61,9 +70,12 @@ $hasCustomSigning = @(
 $env:JAVA_HOME = $javaHome
 $env:ANDROID_HOME = $sdkRoot
 $env:ANDROID_SDK_ROOT = $sdkRoot
+$env:NODE_ENV = "production"
 
 Write-Host "JAVA_HOME:" $env:JAVA_HOME
 Write-Host "ANDROID_SDK_ROOT:" $env:ANDROID_SDK_ROOT
+Write-Host "ABI filters:" $env:NAIWA_ABI_FILTERS
+Write-Host "NODE_ENV:" $env:NODE_ENV
 if ($hasCustomSigning) {
     Write-Host "Release signing: custom keystore"
     Write-Host "Store file:" $env:NAIWA_UPLOAD_STORE_FILE
@@ -79,7 +91,7 @@ try {
 
     Push-Location $androidDir
     try {
-        & .\gradlew.bat assembleRelease
+        & .\gradlew.bat assembleRelease "-PreactNativeArchitectures=$($env:NAIWA_ABI_FILTERS)"
     }
     finally {
         Pop-Location

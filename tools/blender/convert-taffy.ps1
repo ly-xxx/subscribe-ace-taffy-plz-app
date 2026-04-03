@@ -4,7 +4,10 @@ param(
     [string]$VmdPath = "",
     [string]$ExpressionVmdPath = "",
     [int]$InstanceCount = 1,
-    [string]$OutputPath = ".\assets\exports\taffy-laugh.glb"
+    [string]$OutputPath = ".\assets\exports\taffy-laugh.glb",
+    [int]$OptimizeMaxTextureSize = 1536,
+    [int]$OptimizeTextureQuality = 92,
+    [int]$OptimizeTextureEffort = 6
 )
 
 Set-StrictMode -Version Latest
@@ -89,3 +92,6 @@ Write-Host "Output:" $env:NAIWA_GLB_OUT
 
 $glbPatchScript = Resolve-Path (Join-Path $repoRoot "tools\\gltf\\patch-glb-materials.mjs")
 node $glbPatchScript $resolvedOutput $resolvedOutput
+
+$glbOptimizeScript = Resolve-Path (Join-Path $repoRoot "tools\\gltf\\optimize-glb.mjs")
+node $glbOptimizeScript $resolvedOutput $resolvedOutput --max-texture-size $OptimizeMaxTextureSize --quality $OptimizeTextureQuality --effort $OptimizeTextureEffort

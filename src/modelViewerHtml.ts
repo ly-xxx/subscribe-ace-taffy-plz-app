@@ -218,6 +218,9 @@ export function createModelViewerHtml({
       const FRONT_FACING_ROTATION_Y = Math.PI - Math.PI / 4;
       const MODEL_VERTICAL_OFFSET = -0.08;
       const AUTO_TARGET_RATIO = 0.74;
+      const RAD_TO_DEG = 180 / Math.PI;
+      const THREE_INTERPOLATE_LINEAR = 2301;
+      const THREE_INTERPOLATE_SMOOTH = 2302;
 
       const app = document.getElementById('app');
       const stageRoot = document.getElementById('stageRoot');
@@ -250,6 +253,10 @@ export function createModelViewerHtml({
       let audioReady = false;
       let playbackRequested = false;
       let currentExpressionPreset = 'default';
+      let currentAnimationInterpolation = 'linear';
+      let cameraStateHandle = null;
+      let lastCameraState = '';
+      let lastCameraStateAt = 0;
 
       function notify(type, detail) {
         if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -267,6 +274,74 @@ export function createModelViewerHtml({
 
       function formatMeters(value) {
         return String(Number(value.toFixed(4))) + 'm';
+      }
+
+      function roundValue(value, digits) {
+        const factor = Math.pow(10, digits);
+        return Math.round(value * factor) / factor;
+      }
+
+      function normalizeDegrees(value) {
+        const normalized = value % 360;
+        return normalized < 0 ? normalized + 360 : normalized;
+      }
+
+      function readCameraState() {
+        const viewer = getViewer();
+        if (!viewer || typeof viewer.getCameraOrbit !== 'function') {
+          return null;
+        }
+
+        const orbit = viewer.getCameraOrbit();
+        if (!orbit) {
+          return null;
+        }
+
+        const azimuthDeg = normalizeDegrees(Number(orbit.theta) * RAD_TO_DEG);
+        const polarDeg = Number(orbit.phi) * RAD_TO_DEG;
+        const radiusM = Number(orbit.radius);
+
+        if (!Number.isFinite(azimuthDeg) || !Number.isFinite(polarDeg) || !Number.isFinite(radiusM)) {
+          return null;
+        }
+
+        return {
+          azimuthDeg: roundValue(azimuthDeg, 2),
+          polarDeg: roundValue(polarDeg, 2),
+          radiusM: roundValue(radiusM, 3),
+        };
+      }
+
+      function stopCameraStateLoop() {
+        if (cameraStateHandle) {
+          cancelAnimationFrame(cameraStateHandle);
+          cameraStateHandle = null;
+        }
+      }
+
+      function sendCameraState(force) {
+        const state = readCameraState();
+        if (!state) {
+          return;
+        }
+
+        const snapshot = JSON.stringify(state);
+        const now = performance.now();
+        if (!force && snapshot === lastCameraState && now - lastCameraStateAt < 96) {
+          return;
+        }
+
+        lastCameraState = snapshot;
+        lastCameraStateAt = now;
+        notify('camera-state', state);
+      }
+
+      function scheduleCameraState(force) {
+        stopCameraStateLoop();
+        cameraStateHandle = requestAnimationFrame(() => {
+          cameraStateHandle = null;
+          sendCameraState(force);
+        });
       }
 
       function getNodeWorldPosition(node) {
@@ -478,6 +553,13 @@ export function createModelViewerHtml({
         if (typeof config.expressionPreset === 'string') {
           currentExpressionPreset = config.expressionPreset;
         }
+
+        if (typeof config.animationInterpolation === 'string') {
+          currentAnimationInterpolation = config.animationInterpolation;
+          applyAnimationInterpolation();
+        }
+
+        scheduleCameraState(true);
       }
 
       function readVisualEnergy() {
@@ -729,7 +811,47 @@ export function createModelViewerHtml({
           viewer.animationName = preferred;
         }
 
+        applyAnimationInterpolation();
+
         return names.length;
+      }
+
+      function applyAnimationInterpolation() {
+        const animations = internalSceneHandle?.currentGLTF?.animations;
+        if (!Array.isArray(animations)) {
+          return;
+        }
+
+        const interpolation =
+          currentAnimationInterpolation === 'smooth' ? THREE_INTERPOLATE_SMOOTH : THREE_INTERPOLATE_LINEAR;
+
+        for (const clip of animations) {
+          if (!clip || !Array.isArray(clip.tracks)) {
+            continue;
+          }
+
+          for (const track of clip.tracks) {
+            if (!track || typeof track.setInterpolation !== 'function') {
+              continue;
+            }
+
+            try {
+              track.setInterpolation(interpolation);
+            } catch {
+              if (interpolation !== THREE_INTERPOLATE_LINEAR) {
+                try {
+                  track.setInterpolation(THREE_INTERPOLATE_LINEAR);
+                } catch {
+                  // Ignore tracks that reject runtime interpolation changes.
+                }
+              }
+            }
+          }
+
+          if (typeof clip.resetDuration === 'function') {
+            clip.resetDuration();
+          }
+        }
       }
 
       function phaseDistance(phase, center) {
@@ -1053,6 +1175,7 @@ export function createModelViewerHtml({
           }
         });
 
+        applyAnimationInterpolation();
         syncAutoCameraTarget(viewer);
         startMorphLoop();
 
@@ -1196,6 +1319,7 @@ export function createModelViewerHtml({
       window.addEventListener('beforeunload', () => {
         stopMorphLoop();
         stopPlaybackMonitor();
+        stopCameraStateLoop();
         teardownAudio();
         releaseBlobUrl('model');
       });
@@ -1255,6 +1379,10 @@ export function createModelViewerHtml({
           return;
         }
 
+        viewer.addEventListener('camera-change', () => {
+          scheduleCameraState(false);
+        });
+
         viewer.addEventListener('load', () => {
           const animationCount = selectPrimaryAnimation(viewer);
           const sceneInfo = stabilizeSceneGraph(viewer);
@@ -1272,6 +1400,7 @@ export function createModelViewerHtml({
           setExpressionWeights(baseExpressionWeights);
           startPlaybackMonitor();
           sendPlaybackStatus(true);
+          sendCameraState(true);
 
           notify('viewer-ready', {
             message: '舞台已准备好。',

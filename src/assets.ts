@@ -1,4 +1,5 @@
 import { Asset } from 'expo-asset';
+import type { CameraPresetId } from './showConfig';
 
 export type CreditBlock = {
   title: string;
@@ -23,6 +24,8 @@ export type MotionAssetEntry = {
   glbModule: number;
   audioModule: number | null;
   expressionPreset?: 'default' | 'grin';
+  animationInterpolation?: 'linear' | 'smooth';
+  cameraOrbitByPreset?: Partial<Record<CameraPresetId, string>>;
   cameraAzimuthOffsetDeg: number;
   cameraTargetM?: string;
   cameraTargetOffsetXM?: number;
@@ -40,7 +43,11 @@ export const motionCatalog = [
     glbModule: require('../assets/exports/taffy-laugh.glb'),
     audioModule: require('../assets/mmd/taffy_motion/关注塔菲谢谢喵MMD动作/关注塔菲谢谢喵.mp3'),
     expressionPreset: 'default',
-    cameraAzimuthOffsetDeg: 0,
+    animationInterpolation: 'linear',
+    cameraOrbitByPreset: {
+      full: '134.2deg 58.1deg 7.8m',
+    },
+    cameraAzimuthOffsetDeg: 45,
     cameraTargetM: '0m 0.88m 0m',
     cameraTargetOffsetXM: 0,
     theme: {
@@ -83,6 +90,7 @@ export const motionCatalog = [
     glbModule: require('../assets/exports/taffy-nailong-laugh.glb'),
     audioModule: require('../assets/mmd/taffy_motion/奶龙捧腹大笑/1_永雏塔菲逆天唐笑_(Vocals).wav'),
     expressionPreset: 'grin',
+    animationInterpolation: 'smooth',
     cameraAzimuthOffsetDeg: 15,
     cameraTargetM: undefined,
     cameraTargetOffsetXM: 0,

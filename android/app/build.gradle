@@ -7,6 +7,11 @@ def releaseStoreFileProp = findProperty('NAIWA_UPLOAD_STORE_FILE') ?: System.get
 def releaseStorePasswordProp = findProperty('NAIWA_UPLOAD_STORE_PASSWORD') ?: System.getenv('NAIWA_UPLOAD_STORE_PASSWORD')
 def releaseKeyAliasProp = findProperty('NAIWA_UPLOAD_KEY_ALIAS') ?: System.getenv('NAIWA_UPLOAD_KEY_ALIAS')
 def releaseKeyPasswordProp = findProperty('NAIWA_UPLOAD_KEY_PASSWORD') ?: System.getenv('NAIWA_UPLOAD_KEY_PASSWORD')
+def abiFiltersProp = (findProperty('NAIWA_ABI_FILTERS') ?: System.getenv('NAIWA_ABI_FILTERS') ?: 'arm64-v8a').toString().trim()
+def configuredAbiFilters =
+    abiFiltersProp.equalsIgnoreCase('all') || abiFiltersProp.isEmpty()
+        ? []
+        : abiFiltersProp.split(',').collect { it.trim() }.findAll { !it.isEmpty() }
 def hasCustomReleaseSigning = [
     releaseStoreFileProp,
     releaseStorePasswordProp,
@@ -106,6 +111,12 @@ android {
         versionName "1.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+
+        if (!configuredAbiFilters.isEmpty()) {
+            ndk {
+                abiFilters(*configuredAbiFilters as String[])
+            }
+        }
     }
     signingConfigs {
         debug {
@@ -154,6 +165,12 @@ if (hasCustomReleaseSigning) {
     println "Release signing: using custom keystore from NAIWA_UPLOAD_*."
 } else {
     println "Release signing: custom keystore not configured, falling back to debug keystore."
+}
+
+if (configuredAbiFilters.isEmpty()) {
+    println "ABI filters: all"
+} else {
+    println "ABI filters: ${configuredAbiFilters.join(', ')}"
 }
 
 // Apply static values from `gradle.properties` to the `android.packagingOptions`
