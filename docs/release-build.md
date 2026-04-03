@@ -99,6 +99,33 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-release-apk.ps1 `
 
 `AAB` 脚本同样支持这四个参数，并支持用 `-AbiFilters "arm64-v8a,armeabi-v7a"` 或其他值覆盖默认 ABI 策略。
 
+## GitHub Pages 分发
+
+现在仓库已经拆成两层：
+
+- `GitHub Pages`：负责产品页与下载入口
+- `GitHub Releases`：负责实际承载 `APK / AAB`
+
+推荐公开分发方式：
+
+1. 在本地确认 `main` 已经是你要发布的版本
+2. 打一个版本 tag
+3. 推送 tag 到 GitHub
+
+例如：
+
+```powershell
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+推送后：
+
+- `.github/workflows/publish-release.yml` 会自动构建并创建一个 GitHub Release
+- `docs/` 落地页会自动读取最新 release，并把“下载 APK / 下载 AAB”按钮指到最新版本
+
+如果你配置了 `NAIWA_UPLOAD_*` 对应的仓库 secrets，那么这里生成的就是正式签名产物；如果没有，workflow 仍会回退到 debug keystore，只适合体验分发。
+
 ## 当前仓库的实际状态
 
 - `android/app/build.gradle` 已支持读取 `NAIWA_UPLOAD_*` 变量作为 release 签名配置。
