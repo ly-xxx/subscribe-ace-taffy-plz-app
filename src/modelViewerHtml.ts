@@ -6,18 +6,21 @@ export function createModelViewerHtml({
   posterText,
   initialAnimationSpeed,
   initialCameraOrbit,
+  initialCameraTarget,
 }: {
   modelUri: string | null;
   audioUri: string | null;
   posterText: string;
   initialAnimationSpeed: number;
   initialCameraOrbit: string;
+  initialCameraTarget: string | null;
 }) {
   const safeModelUri = modelUri ? JSON.stringify(modelUri) : 'null';
   const safeAudioUri = audioUri ? JSON.stringify(audioUri) : 'null';
   const safePosterText = JSON.stringify(posterText);
   const safeAnimationSpeed = JSON.stringify(initialAnimationSpeed);
   const safeCameraOrbit = JSON.stringify(initialCameraOrbit);
+  const safeInitialCameraTarget = initialCameraTarget ? JSON.stringify(initialCameraTarget) : 'null';
   const inlineModelViewerScript = modelViewerScript;
 
   return `
@@ -202,6 +205,7 @@ export function createModelViewerHtml({
       const posterText = ${safePosterText};
       const initialAnimationSpeed = ${safeAnimationSpeed};
       const initialCameraOrbit = ${safeCameraOrbit};
+      const initialCameraTarget = ${safeInitialCameraTarget};
 
       const OPAQUE_MATERIALS = new Set(['Body', 'Ear']);
       const BLEND_MATERIALS = new Set(['Dark+Water']);
@@ -234,6 +238,7 @@ export function createModelViewerHtml({
       let playbackMonitorHandle = null;
       let baseExpressionWeights = Object.create(null);
       let autoCameraTarget = DEFAULT_CAMERA_TARGET;
+      let manualCameraTarget = null;
       let cameraTargetOffsetX = 0;
       let selectedAnimationName = '';
       let isLooping = true;
@@ -446,16 +451,16 @@ export function createModelViewerHtml({
           viewer.setAttribute('camera-orbit', config.cameraOrbit);
         }
 
-        if (
-          typeof config.cameraTargetOffsetX === 'number' &&
-          Number.isFinite(config.cameraTargetOffsetX)
-        ) {
-          cameraTargetOffsetX = config.cameraTargetOffsetX;
-        }
+        cameraTargetOffsetX =
+          typeof config.cameraTargetOffsetX === 'number' && Number.isFinite(config.cameraTargetOffsetX)
+            ? config.cameraTargetOffsetX
+            : 0;
 
         if (typeof config.cameraTarget === 'string') {
+          manualCameraTarget = config.cameraTarget;
           viewer.setAttribute('camera-target', config.cameraTarget);
         } else {
+          manualCameraTarget = null;
           syncAutoCameraTarget(viewer);
         }
 
@@ -600,7 +605,7 @@ export function createModelViewerHtml({
         const tick = () => {
           syncViewerToAudio();
           const viewer = getViewer();
-          if (viewer) {
+          if (viewer && !manualCameraTarget) {
             syncAutoCameraTarget(viewer);
           }
           paintStudio();
@@ -1230,7 +1235,7 @@ export function createModelViewerHtml({
             camera-controls
             disable-pan
             camera-orbit="\${initialCameraOrbit}"
-            camera-target="\${DEFAULT_CAMERA_TARGET}"
+            camera-target="\${initialCameraTarget || DEFAULT_CAMERA_TARGET}"
             field-of-view="24.4deg"
             min-camera-orbit="-360deg 44deg 1.78m"
             max-camera-orbit="360deg 88deg 7.8m"
@@ -1260,6 +1265,7 @@ export function createModelViewerHtml({
           applyConfig({
             animationSpeed: initialAnimationSpeed,
             cameraOrbit: initialCameraOrbit,
+            cameraTarget: initialCameraTarget,
           });
           viewer.pause();
           viewer.currentTime = 0;

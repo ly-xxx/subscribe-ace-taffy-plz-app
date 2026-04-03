@@ -24,6 +24,7 @@ export type MotionAssetEntry = {
   audioModule: number | null;
   expressionPreset?: 'default' | 'grin';
   cameraAzimuthOffsetDeg: number;
+  cameraTargetM?: string;
   cameraTargetOffsetXM?: number;
   theme: MotionTheme;
   credits: readonly CreditBlock[];
@@ -40,7 +41,8 @@ export const motionCatalog = [
     audioModule: require('../assets/mmd/taffy_motion/关注塔菲谢谢喵MMD动作/关注塔菲谢谢喵.mp3'),
     expressionPreset: 'default',
     cameraAzimuthOffsetDeg: 0,
-    cameraTargetOffsetXM: 0.22,
+    cameraTargetM: '0m 0.88m 0m',
+    cameraTargetOffsetXM: 0,
     theme: {
       wash: 'rgba(255, 238, 244, 0.96)',
       glow: 'rgba(255, 225, 236, 0.88)',
@@ -82,6 +84,7 @@ export const motionCatalog = [
     audioModule: require('../assets/mmd/taffy_motion/奶龙捧腹大笑/1_永雏塔菲逆天唐笑_(Vocals).wav'),
     expressionPreset: 'grin',
     cameraAzimuthOffsetDeg: 15,
+    cameraTargetM: undefined,
     cameraTargetOffsetXM: 0,
     theme: {
       wash: 'rgba(255, 244, 236, 0.96)',

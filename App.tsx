@@ -429,6 +429,7 @@ export default function App() {
     return {
       animationSpeed: 1,
       cameraOrbit: effectiveCameraOrbit,
+      cameraTarget: selectedMotion.cameraTargetM ?? null,
       cameraTargetOffsetX: selectedMotion.cameraTargetOffsetXM ?? 0,
       isLooping,
       expressionPreset: selectedMotion.expressionPreset ?? 'default',
@@ -539,8 +540,9 @@ export default function App() {
         posterText: '离线舞台还没有完成挂载。',
         initialAnimationSpeed: 1,
         initialCameraOrbit: effectiveCameraOrbit,
+        initialCameraTarget: selectedMotion.cameraTargetM ?? null,
       }),
-    [audioUri, modelUri, selectedMotionId]
+    [audioUri, effectiveCameraOrbit, modelUri, selectedMotion.cameraTargetM]
   );
   const viewerWebViewKey = viewerPageUri ?? `inline-${hashString(html)}`;
 
