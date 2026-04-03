@@ -69,7 +69,7 @@ function applyReleaseFallback() {
   setText(releaseDateNodes, '推送 tag 后自动更新');
   setText(releaseSizeNodes, 'GitHub Releases / APK');
   setReleaseLink('apk', releasesPageUrl, '查看 Releases');
-  setReleaseLink('aab', releasesPageUrl, '查看 AAB');
+  setReleaseLink('aab', releasesPageUrl, 'AAB');
   setReleaseLink('releases', releasesPageUrl, '全部版本');
 }
 
@@ -112,7 +112,7 @@ async function hydrateLatestRelease() {
     if (aabAsset?.browser_download_url) {
       setReleaseLink('aab', aabAsset.browser_download_url, '下载 AAB');
     } else {
-      setReleaseLink('aab', release.html_url || releasesPageUrl, '查看 AAB');
+      setReleaseLink('aab', release.html_url || releasesPageUrl, 'AAB');
     }
 
     setReleaseLink('releases', release.html_url || releasesPageUrl, '全部版本');

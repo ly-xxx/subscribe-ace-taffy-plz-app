@@ -2,31 +2,18 @@
 
 ![唐氏驾到主视觉](docs/assets/hero-key-visual.jpg)
 
-离线 MMD 舞台 for Android。模型、动作、配乐都打包在本地，打开就开演。
+Android 离线 MMD 舞台。模型、动作、配乐全部打包在本地，打开就能看。
 
-[GitHub Pages](https://ly-xxx.github.io/subscribe-ace-taffy-plz-app/) · [GitHub Releases](https://github.com/ly-xxx/subscribe-ace-taffy-plz-app/releases) · [构建说明](docs/release-build.md)
+[下载 APK](https://github.com/ly-xxx/subscribe-ace-taffy-plz-app/releases) · [GitHub Pages](https://ly-xxx.github.io/subscribe-ace-taffy-plz-app/) · [构建说明](docs/release-build.md) · [资产管线](docs/asset-pipeline.md)
 
-## 现在是什么
+## 特点
 
-- 面向 Android 的离线 MMD 展示 App
-- `GLB + 本地音频 + vendored model-viewer`
-- `Expo / React Native + WebView` 的稳定分发路线
-- Windows 本地可直接构建 `debug APK`、`release APK`、`release AAB`
-- GitHub Pages 负责展示，GitHub Releases 负责下载
+- 离线运行：`GLB`、动作、配乐都随包分发
+- Android 优先：Windows + Android Studio 即可本地构建
+- 稳定路线：`Expo / React Native + WebView + vendored model-viewer`
+- 资产前置：`PMX / VMD -> Blender -> GLB -> App`
 
-## 技术路线
-
-```text
-PMX / VMD
-  -> Blender + mmd_tools
-  -> GLB
-  -> Expo / React Native
-  -> WebView + 本地 model-viewer
-```
-
-项目当前不在运行时直接解析 `PMX / VMD`，而是把复杂度前置到资产转换阶段，换取更稳的移动端播放、离线分发和后续迭代空间。
-
-## 快速开始
+## 本地运行
 
 安装依赖：
 
@@ -34,13 +21,13 @@ PMX / VMD
 npm install
 ```
 
-连接 Android 真机后启动：
+启动 Android：
 
 ```bash
 npm run android
 ```
 
-只预览 Web：
+只看 Web 预览：
 
 ```bash
 npm run web
@@ -51,19 +38,19 @@ npm run web
 Debug APK：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\build-debug-apk.ps1
+npm run build:debug:apk
 ```
 
 Release APK：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\build-release-apk.ps1
+npm run build:release:apk
 ```
 
 Release AAB：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\build-release-aab.ps1
+npm run build:release:aab
 ```
 
 默认输出：
@@ -72,11 +59,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-release-aab.ps1
 android/app/build/outputs/apk/release/app-release.apk
 ```
 
-如果没有配置 `NAIWA_UPLOAD_*`，`release` 构建会回退到 debug keystore。这适合测试和体验分发，不适合直接上架 Google Play。
+如果没有配置 `NAIWA_UPLOAD_*`，`release` 构建会回退到 debug keystore。这适合测试分发，不适合直接上架 Google Play。
 
 ## 资产转换
 
-一键转换当前塔菲资产：
+转换当前塔菲资产：
 
 ```powershell
 npm run convert:taffy
@@ -88,16 +75,16 @@ npm run convert:taffy
 npm run inspect:glb
 ```
 
-更多文档：
+更多说明：
 
 - [docs/asset-pipeline.md](docs/asset-pipeline.md)
 - [tools/blender/README.md](tools/blender/README.md)
 
-## 分发
+## 发布流程
 
-- 推送 `main` 后，GitHub Pages 会自动更新落地页
-- 推送 `v*` tag 后，GitHub Actions 会自动构建并发布最新 `APK / AAB`
-- Pages 首页会自动读取最新 GitHub Release，直接更新下载按钮
+1. 推送 `main`，GitHub Pages 自动更新落地页。
+2. 推送 `v*` tag，GitHub Actions 自动构建并发布 `APK / AAB`。
+3. Pages 首页会自动读取最新 Release，更新下载按钮与版本信息。
 
 例如：
 
@@ -106,17 +93,17 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-## 目录
+## 项目结构
 
-- [App.tsx](App.tsx)：应用入口
-- [src/modelViewerHtml.ts](src/modelViewerHtml.ts)：离线 WebView / model-viewer 桥接
-- [src/showConfig.ts](src/showConfig.ts)：动作、镜头、配乐等配置
-- [assets/exports](assets/exports)：导出的 `GLB` 资源
-- [docs](docs)：GitHub Pages 落地页
-- [scripts](scripts)：本地构建脚本
+- `App.tsx`：应用入口
+- `src/modelViewerHtml.ts`：离线 WebView / model-viewer 舞台
+- `src/showConfig.ts`：动作、镜头、配乐配置
+- `assets/exports/`：导出的 `GLB` 资源
+- `docs/`：GitHub Pages 站点
+- `scripts/`：本地构建脚本
 
 ## 当前状态
 
 - Android 包名：`io.github.ly_xxx.tangshijiadao`
 - 当前路线适合真机体验、GitHub Releases 分发和 Play 前期验证
-- 真正上架 Google Play 前，仍然需要正式 keystore 和正式签名产物
+- 上架 Google Play 前仍然需要正式 keystore 和正式签名产物
