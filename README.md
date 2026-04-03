@@ -2,7 +2,7 @@
 
 ![唐氏驾到主视觉](docs/assets/hero-key-visual.jpg)
 
-Android 离线 MMD 舞台。模型、动作、配乐全部打包在本地，打开就能看。
+离线 MMD 舞台。模型、动作、配乐全部本地。持续进化中。
 
 [下载 APK](https://github.com/ly-xxx/subscribe-ace-taffy-plz-app/releases) · [GitHub Pages](https://ly-xxx.github.io/subscribe-ace-taffy-plz-app/) · [构建说明](docs/release-build.md) · [资产管线](docs/asset-pipeline.md)
 

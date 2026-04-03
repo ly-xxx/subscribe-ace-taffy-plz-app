@@ -233,7 +233,7 @@ a {
 }
 
 .hero h1 {
-  font-size: clamp(4.8rem, 11vw, 9.6rem);
+  font-size: clamp(4.2rem, 10.2vw, 8.8rem);
   background: linear-gradient(135deg, #171216 0%, #4c2233 54%, #f091b7 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -391,9 +391,9 @@ a {
 .share-card figcaption {
   padding: 16px 10px 8px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
 .gallery-card figcaption strong,
@@ -466,10 +466,41 @@ a {
 }
 
 .share-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  background: rgba(255, 255, 255, 0.8);
+  justify-content: flex-end;
+  min-height: 560px;
+  padding: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 250, 252, 0.86) 88%),
+    rgba(255, 255, 255, 0.82);
+}
+
+.share-card img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.02);
+  box-shadow: none;
+}
+
+.share-card-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 223, 235, 0.28), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 249, 251, 0.78) 80%, rgba(255, 248, 251, 0.96) 100%);
+}
+
+.share-card figcaption {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  padding: 28px 28px 30px;
+  gap: 6px;
 }
 
 .site-footer {
@@ -548,6 +579,11 @@ a {
     padding: 24px;
   }
 
+  .share-card {
+    padding: 0;
+    min-height: 480px;
+  }
+
   .site-footer {
     flex-direction: column;
     align-items: flex-start;
@@ -611,11 +647,14 @@ a {
     padding: 12px;
   }
 
+  .share-card {
+    padding: 0;
+    min-height: 400px;
+  }
+
   .gallery-card figcaption,
   .share-card figcaption {
-    padding-inline: 6px;
-    flex-direction: column;
-    align-items: flex-start;
+    padding: 22px 18px 20px;
   }
 
   .release-panel {
