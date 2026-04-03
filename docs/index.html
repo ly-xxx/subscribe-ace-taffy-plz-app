@@ -9,6 +9,26 @@
       content="唐氏驾到。面向 Android 的离线 MMD 舞台。打开，就开演。"
     />
     <meta name="theme-color" content="#fcf7fa" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="唐氏驾到" />
+    <meta property="og:description" content="离线 MMD 舞台 for Android。打开，就开演。" />
+    <meta property="og:url" content="https://ly-xxx.github.io/subscribe-ace-taffy-plz-app/" />
+    <meta
+      property="og:image"
+      content="https://ly-xxx.github.io/subscribe-ace-taffy-plz-app/assets/og-cover.jpg"
+    />
+    <meta property="og:image:width" content="2400" />
+    <meta property="og:image:height" content="1267" />
+    <meta property="og:image:alt" content="唐氏驾到分享图" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="唐氏驾到" />
+    <meta name="twitter:description" content="离线 MMD 舞台 for Android。打开，就开演。" />
+    <meta
+      name="twitter:image"
+      content="https://ly-xxx.github.io/subscribe-ace-taffy-plz-app/assets/og-cover.jpg"
+    />
+    <link rel="canonical" href="https://ly-xxx.github.io/subscribe-ace-taffy-plz-app/" />
+    <link rel="preload" as="image" href="./assets/hero-key-visual.jpg" />
     <link rel="icon" type="image/png" href="./assets/app-icon.png" />
     <link rel="apple-touch-icon" href="./assets/app-icon.png" />
     <link rel="stylesheet" href="./styles.css" />
@@ -42,7 +62,9 @@
         <a class="quiet-link" href="https://github.com/ly-xxx/subscribe-ace-taffy-plz-app">
           GitHub
         </a>
-        <a class="button button-soft" href="./release-build.md">构建</a>
+        <a class="button button-soft" href="https://github.com/ly-xxx/subscribe-ace-taffy-plz-app/releases">
+          Releases
+        </a>
       </div>
     </header>
 
@@ -68,63 +90,19 @@
           <div class="hero-release reveal reveal-delay-3" aria-live="polite">
             <span class="status-pill" data-release-status>待发布</span>
             <span data-release-version>尚未发布</span>
-            <span data-release-size>GitHub Releases</span>
+            <span data-release-size>GitHub Releases / APK</span>
           </div>
         </div>
 
-        <div class="hero-visual reveal reveal-delay-2">
-          <div class="visual-orb orb-a" aria-hidden="true"></div>
-          <div class="visual-orb orb-b" aria-hidden="true"></div>
-          <div class="visual-orb orb-c" aria-hidden="true"></div>
-          <div class="visual-shell" aria-hidden="true"></div>
-
-          <article class="floating-card floating-left">
-            <div class="phone-frame">
-              <img
-                src="./assets/shot-stage-960.jpg"
-                alt="唐氏驾到棚拍白底截图"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
-            <p>正镜</p>
-          </article>
-
-          <article class="hero-device">
-            <div class="device-top">
-              <div class="device-brand">
-                <img
-                  src="./assets/app-icon.png"
-                  alt=""
-                  width="24"
-                  height="24"
-                  decoding="async"
-                />
-                <span>唐氏驾到</span>
-              </div>
-              <span class="device-badge" data-release-status>待发布</span>
-            </div>
-            <div class="phone-frame phone-frame-main">
-              <img
-                src="./assets/shot-hero-960.jpg"
-                alt="唐氏驾到主界面截图"
-                fetchpriority="high"
-                decoding="async"
-              />
-            </div>
-          </article>
-
-          <article class="floating-card floating-right">
-            <div class="phone-frame">
-              <img
-                src="./assets/shot-action-960.jpg"
-                alt="唐氏驾到动作截图"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
-            <p>捧腹</p>
-          </article>
+        <div class="hero-stage surface reveal reveal-delay-2">
+          <img
+            src="./assets/hero-key-visual.jpg"
+            alt="唐氏驾到主视觉"
+            width="2528"
+            height="1696"
+            fetchpriority="high"
+            decoding="async"
+          />
         </div>
       </section>
 
@@ -187,7 +165,7 @@
             />
             <figcaption>
               <strong>正镜</strong>
-              <span>高端棚拍白底</span>
+              <span>棚拍白底</span>
             </figcaption>
           </figure>
 
@@ -219,21 +197,20 @@
         </div>
       </section>
 
-      <section class="download reveal" id="download">
-        <div class="download-shell surface">
-          <div class="download-copy">
+      <section class="download" id="download">
+        <div class="download-grid">
+          <article class="release-card surface reveal">
             <p class="eyebrow">Download</p>
             <h2>现在安装。</h2>
             <p class="download-note">Pages 负责展示。Releases 负责下载。</p>
+
             <div class="download-meta" aria-live="polite">
               <span class="status-pill" data-release-status>待发布</span>
               <span data-release-version>尚未发布</span>
               <span data-release-date>推送 tag 后自动更新</span>
             </div>
-          </div>
 
-          <div class="download-panel">
-            <div class="release-card">
+            <div class="release-panel">
               <span class="release-label">Latest</span>
               <h3 data-release-version>尚未发布</h3>
               <p data-release-size>GitHub Releases / APK</p>
@@ -267,7 +244,22 @@
               <a href="./release-build.md">签名 / 构建</a>
               <a href="https://github.com/ly-xxx/subscribe-ace-taffy-plz-app">源码</a>
             </div>
-          </div>
+          </article>
+
+          <figure class="share-card surface reveal reveal-delay-1">
+            <img
+              src="./assets/og-cover.jpg"
+              alt="唐氏驾到分享图预览"
+              width="2400"
+              height="1267"
+              loading="lazy"
+              decoding="async"
+            />
+            <figcaption>
+              <strong>Share Card</strong>
+              <span>GitHub / Discord / Telegram</span>
+            </figcaption>
+          </figure>
         </div>
       </section>
     </main>
